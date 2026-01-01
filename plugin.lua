@@ -15,10 +15,17 @@ function command(cmd, param) end
 ---@param d integer
 function group(stream, block_b_correction, a, b, c, d) end
 
+---This function should be defined by the user in the script
+---@param event integer
+function event(event) end
+
 ---Open a information message box to the user
 ---@param body string
 ---@param title string
 function message_box(body, title) end
+
+---@param size integer
+function set_font_size(size) end
 
 ---Logs a string inside the host console. Requires console mode to be false.
 ---@param data string
