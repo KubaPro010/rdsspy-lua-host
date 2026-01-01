@@ -52,6 +52,22 @@ static HFONT g_hCurrentFont = NULL;
 
 #define IDC_MAIN_BUTTON 101
 
+#define WINDOW_HEIGHT 380
+#define WINDOW_WIDTH 545
+#define BUTTON_COUNT 6
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+#define EVENT_BUTTON(I) \
+HWND hButton_event##I = CreateWindowEx( \
+    0, "BUTTON", "Event " TOSTRING(I), \
+    WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, \
+    10 + (75 * I), WINDOW_HEIGHT-62, \
+    70, 30, hWnd, \
+    (HMENU)(IDC_MAIN_BUTTON + I), hInst, NULL \
+);
+
 static const unsigned char EBU[127] = {
     0xE1, 'a', 0xE9, 'e', 0xED, 'i', 0xF3, 'o', 0xFA, 'u', 'N', 0xC7, 0xAA, 0xDF, 'I', 0x00,
     0xE2, 0xE4, 'e', 0xEB, 0xEE, 'i', 0xF4, 0xF6, 'u', 0xFC, 'n', 0xE7, 0xBA, 0x00, 'i', 0x00,
@@ -94,7 +110,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int controlId = LOWORD(wParam);
 
                 if (controlId == IDC_MAIN_BUTTON) InitLua();
-                else if (controlId > IDC_MAIN_BUTTON && controlId <= IDC_MAIN_BUTTON + 5) lua_event(controlId - IDC_MAIN_BUTTON);
+                else if (controlId > IDC_MAIN_BUTTON && controlId <= IDC_MAIN_BUTTON + BUTTON_COUNT) lua_event(controlId - IDC_MAIN_BUTTON);
             }
             break;
         case WM_DESTROY:
@@ -119,7 +135,7 @@ void CreatePluginWindow(HWND hOwner) {
         "Lua Host Console",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
         CW_USEDEFAULT, CW_USEDEFAULT,
-        480, 320,
+        WINDOW_WIDTH, WINDOW_HEIGHT,
         hOwner,
         NULL,
         hInst,
@@ -130,53 +146,24 @@ void CreatePluginWindow(HWND hOwner) {
         WS_EX_CLIENTEDGE, "EDIT", "",
         WS_CHILD | WS_VISIBLE | WS_VSCROLL |
         ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
-        10, 10, 480-25, 320-75,
+        10, 10, WINDOW_WIDTH-25, WINDOW_HEIGHT-75,
         hWnd, NULL, hInst, NULL
     );
 
     HWND hButton = CreateWindowEx(
         0, "BUTTON", "Reload",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10, 258,
+        10, WINDOW_HEIGHT-62,
         70, 30, hWnd,
         (HMENU)IDC_MAIN_BUTTON, hInst, NULL
     );
 
-    HWND hButton_event1 = CreateWindowEx(
-        0, "BUTTON", "Event 1",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10+(75*1), 258,
-        70, 30, hWnd,
-        (HMENU)(IDC_MAIN_BUTTON + 1), hInst, NULL
-    );
-    HWND hButton_event2 = CreateWindowEx(
-        0, "BUTTON", "Event 2",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10+(75*2), 258,
-        70, 30, hWnd,
-        (HMENU)(IDC_MAIN_BUTTON + 2), hInst, NULL
-    );
-    HWND hButton_event3 = CreateWindowEx(
-        0, "BUTTON", "Event 3",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10+(75*3), 258,
-        70, 30, hWnd,
-        (HMENU)(IDC_MAIN_BUTTON + 3), hInst, NULL
-    );
-    HWND hButton_event4 = CreateWindowEx(
-        0, "BUTTON", "Event 4",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10+(75*4), 258,
-        70, 30, hWnd,
-        (HMENU)(IDC_MAIN_BUTTON + 4), hInst, NULL
-    );
-    HWND hButton_event5 = CreateWindowEx(
-        0, "BUTTON", "Event 5",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10+(75*5), 258,
-        70, 30, hWnd,
-        (HMENU)(IDC_MAIN_BUTTON + 5), hInst, NULL
-    );
+    EVENT_BUTTON(1)
+    EVENT_BUTTON(2)
+    EVENT_BUTTON(3)
+    EVENT_BUTTON(4)
+    EVENT_BUTTON(5)
+    EVENT_BUTTON(6)
 
     HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_NAME);
     SendMessage(hEditControl, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -186,6 +173,7 @@ void CreatePluginWindow(HWND hOwner) {
     SendMessage(hButton_event3, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hButton_event4, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hButton_event5, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hButton_event6, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     HICON hIconBig = (HICON)SendMessage(hOwner, WM_GETICON, ICON_BIG, 0);
     HICON hIconSmall = (HICON)SendMessage(hOwner, WM_GETICON, ICON_SMALL, 0);

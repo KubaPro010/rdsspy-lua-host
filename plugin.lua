@@ -57,8 +57,8 @@ function db.reset_values(key, value) end
 ---@return integer
 function db.count_records(key, value) end
 
----@param ch string
----@return string
+---@param ch integer
+---@return integer
 function db.char_conv(ch) end
 
 ---@param filename string
