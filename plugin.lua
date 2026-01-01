@@ -34,8 +34,8 @@ function db.read_value(key) end
 ---@return string|nil
 function db.read_record(index) end
 
----@param key integer
----@param value integer
+---@param key string
+---@param value string
 function db.add_value(key, value) end
 
 function db.reset_values(key, value) end
