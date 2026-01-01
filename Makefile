@@ -4,7 +4,7 @@ liblua:
 	rm *.o
 
 build: liblua
-	gcc -O2 -shared -static -o MyPlugin.dll plugin.c liblua -lgdi32 -luser32 \
+	gcc -O2 -shared -static -o MyPlugin.dll plugin.c liblua -lgdi32 -luser32 -lshell32 \
 	    -Wl,--add-stdcall-alias \
 	    -ffunction-sections -fdata-sections
 

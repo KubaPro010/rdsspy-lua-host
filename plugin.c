@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <shlobj.h>
 #include "lua/lua.h"
 #include "lua/lualib.h"
 #include "lua/lauxlib.h"
@@ -21,6 +22,7 @@ typedef struct {
 } TRDSGroup;
 
 typedef struct {
+    // fuckass delphi
     unsigned char len;
     char data[255];
 } ShortString;
@@ -149,10 +151,28 @@ void lua_call_command(const char* Cmd, const char* Param) {
     } else lua_pop(L, 1);
 }
 
+void lua_call_group() {
+    lua_getglobal(L, "group");
+
+    if (lua_isfunction(L, -1)) {
+        lua_pushinteger(L, Group.RFU & 3); // TODO: find out if fuckass pira.cz meant msb or lsb, i have no clue what does "Bits: 0-1" mean
+        lua_pushboolean(L, (Group.RFU & 0x100) >> 8); // just do lsb for now i guess
+        lua_pushinteger(L, Group.Blk1);
+        lua_pushinteger(L, Group.Blk2);
+        lua_pushinteger(L, Group.Blk3);
+        lua_pushinteger(L, Group.Blk4);
+        if (lua_pcall(L, 6, 0, 0) != LUA_OK) {
+            fprintf(stderr, "Lua error: %s at '%s'\n", lua_tostring(L, -1), "command");
+            lua_pop(L, 1);
+        }
+    } else lua_pop(L, 1);
+}
+
 __declspec(dllexport) void __stdcall RDSGroup(TRDSGroup* PRDSGroup) {
     if (PRDSGroup == NULL) return;
     
     Group = *PRDSGroup;
+    lua_call_group();
 }
 
 __declspec(dllexport) void __stdcall Command(const char* Cmd, const char* Param) {
@@ -170,8 +190,11 @@ __declspec(dllexport) void __stdcall Command(const char* Cmd, const char* Param)
         ShowWindow(hWnd, SW_SHOW);
     } else if (_stricmp(Cmd, "SHOW") == 0) {
         ShowWindow(hWnd, SW_SHOW);
-    }
-    else {
+    } else if (_stricmp(Cmd, "MINIMIZE") == 0) {
+        ShowWindow(hWnd, SW_MINIMIZE);
+    } else if (_stricmp(Cmd, "RESTORE") == 0) {
+        ShowWindow(hWnd, SW_RESTORE);
+    } else {
         lua_call_command(Cmd, Param);
     }
 }
@@ -189,17 +212,26 @@ __declspec(dllexport) int __stdcall Initialize(HANDLE hHandle, TDB* DBPointer) {
     lua_register(L, "message_box", lua_MessageBox);
     lua_register(L, "log", lua_log);
 
+    char path[MAX_PATH];
+    char fullPath[MAX_PATH];
+
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\script.lua", path);
+    } else {
+        MessageBoxA(NULL, "Could not get the local app data path", "Error", MB_ICONERROR | MB_OK | MB_TOPMOST);
+        AppendText("Could not get the local app data path\r\n");
+        return (int)hWnd;
+    }
+
     char msg_buffer[255];
-    if (luaL_loadfile(L, "C:\\Users\\Kuba\\AppData\\Local\\RDS Spy\\script.lua") != LUA_OK) {
-        sprintf(msg_buffer, "Lua error loading file: %s\n", lua_tostring(L, -1));
+    if (luaL_loadfile(L, fullPath) != LUA_OK) {
+        sprintf(msg_buffer, "Lua error loading file: %s\r\n", lua_tostring(L, -1));
         AppendText(msg_buffer);
-        AppendText("\r\n");
         lua_pop(L, 1);
     } else {
         if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-            sprintf(msg_buffer, "Init error: %s\n", lua_tostring(L, -1));
+            sprintf(msg_buffer, "Init error: %s\r\n", lua_tostring(L, -1));
             AppendText(msg_buffer);
-            AppendText("\r\n");
             lua_pop(L, 1);
         }
     }
