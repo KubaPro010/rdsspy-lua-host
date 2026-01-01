@@ -45,15 +45,248 @@ static HINSTANCE hInst = NULL;
 static lua_State* L = NULL;
 
 static HWND hEditControl = NULL;
+static TDB* g_DBPointer = NULL;
+
+static const unsigned char EBU[127] = {
+    0xE1, 'a', 0xE9, 'e', 0xED, 'i', 0xF3, 'o', 0xFA, 'u', 'N', 0xC7, 0xAA, 0xDF, 'I', 0x00,
+    0xE2, 0xE4, 'e', 0xEB, 0xEE, 'i', 0xF4, 0xF6, 'u', 0xFC, 'n', 0xE7, 0xBA, 0x00, 'i', 0x00,
+    0x00, 0x00, 0xA9, 0x89, 0x00, 0xEC, 0xF2, 0xF5, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xB1, 'I', 0xF1, 0xFB, 0xB5, '?', 0xF7, 0xB0, 0x00, 0x00, 0x00, 0xA7, 0x00,
+    0xC1, 'A', 0xC9, 'E', 0xCD, 'I', 0xD3, 'O', 0xDA, 'U', 0xD8, 0xC8, 0x8A, 0x8E, 0xD0, 'L',
+    0xC2, 0xC4, 'E', 0xCB, 0xCE, 'I', 0xD4, 0xD6, 'U', 0xDC, 0xF8, 0xE8, 0x9A, 0x9E, 0xF0, 'l',
+    0x00, 0x00, 0x00, 0x00, 0x00, 0xDD, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xC6, 0x8C, 0x8F, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFD, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xE6, 0x9C, 0x9F, 0x00
+};
+
+
+unsigned char CharConv(unsigned char Ch) {
+    if (Ch >= 128 && Ch < 255) {
+        unsigned char conv = EBU[Ch - 128];
+        if (conv != 0) return conv;
+    }
+    return Ch;
+}
+
+int lua_ReadValue(lua_State* localL) {
+    if (g_DBPointer == NULL) {
+        lua_pushnil(localL);
+        return 1;
+    }
+
+    const char* key = luaL_checkstring(localL, 1);
+    ShortString skey;
+    skey.len = strlen(key);
+    if (skey.len > 255) skey.len = 255;
+    memcpy(skey.data, key, skey.len);
+
+    int count = g_DBPointer->Count;
+    if (count > 255) count = 255;
+
+    for (int i = 0; i < count; i++) {
+        if (g_DBPointer->Records[i].Key.len == skey.len &&
+            memcmp(g_DBPointer->Records[i].Key.data, skey.data, skey.len) == 0) {
+            lua_pushlstring(localL, g_DBPointer->Records[i].Value.data, g_DBPointer->Records[i].Value.len);
+            return 1;
+        }
+    }
+
+    lua_pushnil(localL);
+    return 1;
+}
+
+int lua_ReadRecord(lua_State* localL) {
+    if (g_DBPointer == NULL) {
+        lua_pushnil(localL);
+        lua_pushnil(localL);
+        return 2;
+    }
+
+    int index = luaL_checkinteger(localL, 1);
+
+    if (index < 0 || index >= g_DBPointer->Count || index >= 255) {
+        lua_pushnil(localL);
+        lua_pushnil(localL);
+        return 2;
+    }
+
+    lua_pushlstring(localL, g_DBPointer->Records[index].Key.data, g_DBPointer->Records[index].Key.len);
+    lua_pushlstring(localL, g_DBPointer->Records[index].Value.data, g_DBPointer->Records[index].Value.len);
+    return 2;
+}
+
+int lua_AddValue(lua_State* localL) {
+    if (g_DBPointer == NULL) return 0;
+    
+    const char* key = luaL_checkstring(localL, 1);
+    const char* value = luaL_checkstring(localL, 2);
+    
+    ShortString skey, svalue;
+    skey.len = strlen(key);
+    if (skey.len > 255) skey.len = 255;
+    memcpy(skey.data, key, skey.len);
+    
+    svalue.len = strlen(value);
+    if (svalue.len > 252) {
+        svalue.len = 252;
+        memcpy(svalue.data, value, 252);
+        memcpy(svalue.data + 252, "...", 3);
+        svalue.len = 255;
+    } else memcpy(svalue.data, value, svalue.len);
+    
+    int count = g_DBPointer->Count;
+    if (count > 255) count = 255;
+    
+    for (int i = 0; i < count; i++) {
+        if (g_DBPointer->Records[i].Key.len == skey.len &&
+            memcmp(g_DBPointer->Records[i].Key.data, skey.data, skey.len) == 0) {
+            g_DBPointer->Records[i].Value = svalue;
+            return 0;
+        }
+    }
+    
+    if (count < 254) {
+        g_DBPointer->Records[count].Key = skey;
+        g_DBPointer->Records[count].Value = svalue;
+        g_DBPointer->Count = count + 1;
+    } else if (_stricmp(key, "COMMAND") == 0) {
+        g_DBPointer->Records[254].Key = skey;
+        g_DBPointer->Records[254].Value = svalue;
+    }
+    
+    return 0;
+}
+
+int lua_ResetValues(lua_State* localL) {
+    if (g_DBPointer == NULL) return 0;
+    g_DBPointer->Count = 0;
+    return 0;
+}
+
+int lua_CountRecords(lua_State* localL) {
+    if (g_DBPointer == NULL) {
+        lua_pushinteger(localL, 0);
+        return 1;
+    }
+    
+    int count = g_DBPointer->Count;
+    if (count > 255) count = 255;
+    lua_pushinteger(localL, count);
+    return 1;
+}
+
+int lua_CharConv(lua_State* localL) {
+    int ch = luaL_checkinteger(localL, 1);
+    lua_pushinteger(localL, CharConv((unsigned char)ch));
+    return 1;
+}
+
+int lua_SaveString(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    const char* value = luaL_checkstring(localL, 4);
+    
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        WritePrivateProfileStringA(section, key, value, fullPath);
+    }
+    return 0;
+}
+
+int lua_SaveInteger(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    int value = luaL_checkinteger(localL, 4);
+    
+    char valueStr[32];
+    snprintf(valueStr, 32, "%d", value);
+    
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        WritePrivateProfileStringA(section, key, valueStr, fullPath);
+    }
+    return 0;
+}
+
+int lua_SaveBoolean(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    int value = lua_toboolean(localL, 4);
+    
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        WritePrivateProfileStringA(section, key, value ? "1" : "0", fullPath);
+    }
+    return 0;
+}
+
+int lua_LoadString(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    const char* defaultValue = luaL_optstring(localL, 4, "");
+    
+    char buffer[1024];
+    char path[MAX_PATH];
+    
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        GetPrivateProfileStringA(section, key, defaultValue, buffer, 1024, fullPath);
+        lua_pushstring(localL, buffer);
+    } else lua_pushstring(localL, defaultValue);
+    return 1;
+}
+
+int lua_LoadInteger(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    int defaultValue = luaL_optinteger(localL, 4, 0);
+    
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        int value = GetPrivateProfileIntA(section, key, defaultValue, fullPath);
+        lua_pushinteger(localL, value);
+    } else lua_pushinteger(localL, defaultValue);
+    return 1;
+}
+
+int lua_LoadBoolean(lua_State* localL) {
+    const char* filename = luaL_checkstring(localL, 1);
+    const char* section = luaL_checkstring(localL, 2);
+    const char* key = luaL_checkstring(localL, 3);
+    int defaultValue = lua_toboolean(localL, 4);
+    
+    char buffer[16];
+    char path[MAX_PATH];
+    
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+        char fullPath[MAX_PATH];
+        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+        GetPrivateProfileStringA(section, key, defaultValue ? "1" : "0", buffer, 16, fullPath);
+        lua_pushboolean(localL, atoi(buffer) != 0);
+    } else lua_pushboolean(localL, defaultValue);
+    return 1;
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
         case WM_CLOSE:
-            ShowWindow(hwnd, SW_HIDE);  // hide instead of destroy (DLL-safe)
+            ShowWindow(hwnd, SW_HIDE);
             return 0;
-
         case WM_DESTROY:
             hWnd = NULL;
             return 0;
@@ -84,31 +317,19 @@ void CreatePluginWindow(HWND hOwner)
         NULL
     );
 
-    // Create multiline edit control
     hEditControl = CreateWindowEx(
-        WS_EX_CLIENTEDGE,
-        "EDIT",
-        "",
-        WS_CHILD | WS_VISIBLE | WS_VSCROLL | 
+        WS_EX_CLIENTEDGE, "EDIT", "",
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL |
         ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
-        10, 10,
-        370, 250,
-        hWnd,
-        NULL,
-        hInst,
-        NULL
+        10, 10, 370, 250,
+        hWnd, NULL, hInst, NULL
     );
 
-    // Set a default font
-    HFONT hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                            DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+    HFONT hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
     SendMessage(hEditControl, WM_SETFONT, (WPARAM)hFont, TRUE);
-
     UpdateWindow(hWnd);
 }
 
-// Append text to the control
 void AppendText(const char* text) {
     if (hEditControl != NULL) {
         int len = GetWindowTextLength(hEditControl);
@@ -117,11 +338,8 @@ void AppendText(const char* text) {
     }
 }
 
-// Set text (replace all)
 void SetText(const char* text) {
-    if (hEditControl != NULL) {
-        SetWindowTextA(hEditControl, text);
-    }
+    if (hEditControl != NULL) SetWindowTextA(hEditControl, text);
 }
 
 int lua_log(lua_State* localL) {
@@ -145,7 +363,9 @@ void lua_call_command(const char* Cmd, const char* Param) {
         lua_pushstring(L, Cmd);
         lua_pushstring(L, Param);
         if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-            fprintf(stderr, "Lua error: %s at '%s'\n", lua_tostring(L, -1), "command");
+            char msg_buffer[255];
+            sprintf(msg_buffer, "Lua error: %s at '%s'\n", lua_tostring(L, -1), "command");
+            AppendText(msg_buffer);
             lua_pop(L, 1);
         }
     } else lua_pop(L, 1);
@@ -162,7 +382,9 @@ void lua_call_group() {
         lua_pushinteger(L, Group.Blk3);
         lua_pushinteger(L, Group.Blk4);
         if (lua_pcall(L, 6, 0, 0) != LUA_OK) {
-            fprintf(stderr, "Lua error: %s at '%s'\n", lua_tostring(L, -1), "command");
+            char msg_buffer[255];
+            sprintf(msg_buffer, "Lua error: %s at '%s'\r\n", lua_tostring(L, -1), "command");
+            AppendText(msg_buffer);
             lua_pop(L, 1);
         }
     } else lua_pop(L, 1);
@@ -170,7 +392,7 @@ void lua_call_group() {
 
 __declspec(dllexport) void __stdcall RDSGroup(TRDSGroup* PRDSGroup) {
     if (PRDSGroup == NULL) return;
-    
+
     Group = *PRDSGroup;
     lua_call_group();
 }
@@ -186,21 +408,55 @@ __declspec(dllexport) void __stdcall Command(const char* Cmd, const char* Param)
             lua_close(L);
             L = NULL;
         }
-    } else if (_stricmp(Cmd, "CONFIGURE") == 0) {
-        ShowWindow(hWnd, SW_SHOW);
-    } else if (_stricmp(Cmd, "SHOW") == 0) {
-        ShowWindow(hWnd, SW_SHOW);
-    } else if (_stricmp(Cmd, "MINIMIZE") == 0) {
-        ShowWindow(hWnd, SW_MINIMIZE);
-    } else if (_stricmp(Cmd, "RESTORE") == 0) {
-        ShowWindow(hWnd, SW_RESTORE);
-    } else {
-        lua_call_command(Cmd, Param);
-    }
+    } else if (_stricmp(Cmd, "CONFIGURE") == 0) ShowWindow(hWnd, SW_SHOW);
+    else if (_stricmp(Cmd, "SHOW") == 0) ShowWindow(hWnd, SW_SHOW);
+    else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_MINIMIZE);
+    else if (_stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_RESTORE);
+    else lua_call_command(Cmd, Param);
 }
 
-__declspec(dllexport) const char* __stdcall PluginName(void) {
-    return "Lua Host";
+__declspec(dllexport) const char* __stdcall PluginName(void) { return "Lua Host"; }
+
+void RegisterDBFunctions(lua_State* localL) {
+    lua_newtable(localL);
+    
+    lua_pushcfunction(localL, lua_ReadValue);
+    lua_setfield(localL, -2, "read_value");
+    
+    lua_pushcfunction(localL, lua_ReadRecord);
+    lua_setfield(localL, -2, "read_record");
+    
+    lua_pushcfunction(localL, lua_AddValue);
+    lua_setfield(localL, -2, "add_value");
+    
+    lua_pushcfunction(localL, lua_ResetValues);
+    lua_setfield(localL, -2, "reset_values");
+    
+    lua_pushcfunction(localL, lua_CountRecords);
+    lua_setfield(localL, -2, "count_records");
+    
+    lua_pushcfunction(localL, lua_CharConv);
+    lua_setfield(localL, -2, "char_conv");
+    
+    lua_pushcfunction(localL, lua_SaveString);
+    lua_setfield(localL, -2, "save_string");
+    
+    lua_pushcfunction(localL, lua_SaveInteger);
+    lua_setfield(localL, -2, "save_integer");
+    
+    lua_pushcfunction(localL, lua_SaveBoolean);
+    lua_setfield(localL, -2, "save_boolean");
+    
+    lua_pushcfunction(localL, lua_LoadString);
+    lua_setfield(localL, -2, "load_string");
+    
+    lua_pushcfunction(localL, lua_LoadInteger);
+    lua_setfield(localL, -2, "load_integer");
+    
+    lua_pushcfunction(localL, lua_LoadBoolean);
+    lua_setfield(localL, -2, "load_boolean");
+    
+    lua_setglobal(localL, "db");
 }
 
 __declspec(dllexport) int __stdcall Initialize(HANDLE hHandle, TDB* DBPointer) {
@@ -211,13 +467,14 @@ __declspec(dllexport) int __stdcall Initialize(HANDLE hHandle, TDB* DBPointer) {
     luaL_openlibs(L);
     lua_register(L, "message_box", lua_MessageBox);
     lua_register(L, "log", lua_log);
+    g_DBPointer = DBPointer;
+    RegisterDBFunctions(L);
 
     char path[MAX_PATH];
     char fullPath[MAX_PATH];
 
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\script.lua", path);
-    } else {
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\script.lua", path);
+    else {
         MessageBoxA(NULL, "Could not get the local app data path", "Error", MB_ICONERROR | MB_OK | MB_TOPMOST);
         AppendText("Could not get the local app data path\r\n");
         return (int)hWnd;
@@ -241,10 +498,6 @@ __declspec(dllexport) int __stdcall Initialize(HANDLE hHandle, TDB* DBPointer) {
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
-    if (fdwReason == DLL_PROCESS_ATTACH)
-    {
-        hInst = hinstDLL;
-        MessageBoxA(NULL, "DLL Loaded!", "Debug", MB_OK | MB_TOPMOST);
-    }
+    if (fdwReason == DLL_PROCESS_ATTACH) hInst = hinstDLL;
     return TRUE;
 }
