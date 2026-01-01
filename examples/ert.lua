@@ -1,24 +1,32 @@
-local ert_group = -1
 local ert_string = string.rep("_", 128)
 local ert_last_carriage = -1
-local ert_console_log = false
+local ert_console_log = false -- not state
+
+local odas = {}
+local oda_string = ""
+local ert_display = ""
 
 function command(cmd, param)
     if cmd:lower() == "request" and param:lower() == "decoderdata" then
-        local cr_pos = ert_string:find("\r", 1, true) -- true means "plain search" (faster)
-        local display_text
-
-        if cr_pos then display_text = ert_string:sub(1, cr_pos - 1)
-        else display_text = ert_string:gsub("%s+$", "")
-        end
-        db.add_value("ERT", display_text)
+        db.add_value("ERT", ert_display)
     elseif cmd:lower() == "resetdata" then
-        ert_group = -1
         ert_string = string.rep("_", 128)
         ert_last_carriage = -1
+        odas = {}
+        oda_string = ""
+        ert_display = ""
         if ert_console_log then log("ERT data reset.")
         else set_console_mode(true) end
     end
+end
+
+local function getKeyByValue(t, targetValue)
+    for key, value in pairs(t) do
+        if value == targetValue then
+            return key
+        end
+    end
+    return nil -- Return nil if the value isn't found
 end
 
 function group(stream, b_corr, a, b, c, d)
@@ -33,11 +41,12 @@ function group(stream, b_corr, a, b, c, d)
     if group == 3 and group_version == 0 then
         local oda_group = (b & 0x1f) >> 1
         local oda_group_version = b & 1
-        if d == 0x6552 and oda_group_version == 0 then
-            -- ERT
-            ert_group = oda_group
-        elseif oda_group == ert_group then ert_group = -1 end
-    elseif group == ert_group and group_version == 0 then
+        if odas[oda_group] == nil then odas[oda_group] = d end
+        oda_string = ""
+        for key, value in pairs(odas) do
+            oda_string = oda_string .. string.format("%d: %X |", key, value)
+        end
+    elseif group == getKeyByValue(odas, 0x6552) and group_version == 0 then
         local ert_state = b & 0x1f
         local char1 = string.char((c >> 8) & 0xff)
         local char2 = string.char(c & 0xff)
@@ -48,16 +57,13 @@ function group(stream, b_corr, a, b, c, d)
         ert_string = ert_string:sub(1, start_pos - 1) .. new_chars .. ert_string:sub(start_pos + 4)
 
         local ert_carriage = ert_string:find("\r", 1, true)
+        if ert_carriage then ert_display = ert_string:sub(1, ert_carriage - 1)
+        else ert_display = ert_string:gsub("%s+$", "") end
+
         if ert_carriage ~= ert_last_carriage and ert_carriage ~= nil and ert_console_log then
             log("New ERT string received.")
             ert_last_carriage = ert_carriage
-        elseif not ert_console_log then
-            local display_text
-
-            if ert_carriage then display_text = ert_string:sub(1, ert_carriage - 1)
-            else display_text = ert_string:gsub("%s+$", "") end
-
-            set_console(string.format("ERT: %s", display_text))
         end
     end
+    set_console(string.format("ODAs: %s\r\nERT: %s", oda_string, ert_display))
 end
