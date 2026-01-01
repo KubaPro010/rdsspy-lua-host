@@ -20,9 +20,16 @@ function group(stream, block_b_correction, a, b, c, d) end
 ---@param title string
 function message_box(body, title) end
 
----Logs a string inside the host console
+---Logs a string inside the host console. Requires console mode to be false.
 ---@param data string
 function log(data) end
+
+---Sets the whole text of the console for display. Requires console mode to be true.
+---@param data string
+function set_console(data) end
+
+---@param mode boolean
+function set_console_mode(mode) end
 
 db = {}
 
