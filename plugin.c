@@ -534,14 +534,14 @@ void lua_event(int event) {
     } else lua_pop(L, 1);
 }
 
-__declspec(dllexport) void __stdcall RDSGroup(TRDSGroup* PRDSGroup) {
+__declspec(dllexport) void WINAPI RDSGroup(TRDSGroup* PRDSGroup) {
     if (PRDSGroup == NULL) return;
 
     Group = *PRDSGroup;
     lua_call_group();
 }
 
-__declspec(dllexport) void __stdcall Command(const char* Cmd, const char* Param) {
+__declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
     if (Cmd == NULL) return;
     if (_stricmp(Cmd, "EXIT") == 0) {
         if (hWnd != NULL) {
@@ -592,7 +592,7 @@ __declspec(dllexport) void __stdcall Command(const char* Cmd, const char* Param)
     } else lua_call_command(Cmd, Param);
 }
 
-__declspec(dllexport) const char* __stdcall PluginName(void) { return "Lua Host"; }
+__declspec(dllexport) const char* WINAPI PluginName(void) { return "Lua Host"; }
 
 void InitLua() {
     if(L != NULL) {
@@ -679,7 +679,7 @@ void InitLua() {
     }
 }
 
-__declspec(dllexport) int __stdcall Initialize(HANDLE hHandle, TDB* DBPointer) {
+__declspec(dllexport) int WINAPI Initialize(HANDLE hHandle, TDB* DBPointer) {
     CreatePluginWindow(hHandle);
     AppendText(LUA_COPYRIGHT);
     AppendText("\r\n");

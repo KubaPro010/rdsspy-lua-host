@@ -501,6 +501,10 @@ local rtp_types = {
 	"Identifier", "Purchase", "GET_DATA"
 }
 
+local expected_afs = 0
+local afs = {}
+local state_af_am_follows = false
+
 local last_render_hash = 0
 local function crc(data)
     local sum = 0xFF
@@ -520,10 +524,15 @@ end
 local function render_menu()
     local out = string.format("Menu %d%s\r\n------\r\n", current_menu, menu_extended and " (extended)" or "")
     set_font_size(26)
-    if current_menu == 1 then
+    if current_menu == 1 and not menu_extended then
         set_font_size(72) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
         out = out .. string.format("PI: %s\r\n", db.read_value("PI") or "----")
         out = out .. string.format("PS: %s", db.read_value("PS") or "--------")
+    elseif current_menu == 1 and menu_extended then
+        out = out .. string.format("AF: (%d)\r\n\t", expected_afs)
+        for _, freq in ipairs(afs) do
+            out = out .. string.format("%.1f\r\n\t", freq)
+        end
     elseif current_menu == 2 and not menu_extended then
         out = out .. string.format("PTY: %d (%s / %s)\r\n", pty, pty_rds[pty+1], pty_rbds[pty+1])
         out = out .. string.format("TP %s | TA %s | DPTY %s\r\n", tp and "+" or "-", ta and "+" or "-", dpty and "+" or "-")
@@ -630,13 +639,16 @@ function command(cmd, param)
         time_display_local = "-"
         time_display_offset = 0
         rtp_running = false
-        rtp_running = false
+        rtp_toggle = false
         rtp_type1 = 0
         rtp_start1 = 0
         rtp_len1 = 0
         rtp_type2 = 0
         rtp_start2 = 0
         rtp_len2 = 0
+        expected_afs = 0
+        afs = {}
+        state_af_am_follows = false
     end
 end
 
@@ -776,6 +788,45 @@ function group(stream, b_corr, a, b, c, d, time)
                 local segment = b & 0x3
                 if di_bit and segment == 0 then dpty = true
                 elseif segment == 0 then dpty = false end
+                if c < 0 or group_version == 1 then return end
+                local af_high = c >> 8
+                local af_low = c & 0xff
+                if af_high >= 224 and af_high <= (224+25) then
+                    local run_new = false
+                    expected_afs = af_high - 224
+                    if af_low ~= 205 and af_low ~= 250 and #afs ~= 0 and afs[1] ~= (af_low+875)/10 then run_new = true end
+                    if #afs ~= expected_afs or run_new then
+                        afs = {}
+                        state_af_am_follows = false
+                        if af_low ~= 205 and af_low ~= 250 then table.insert(afs, (af_low+875)/10)
+                        elseif af_low == 250 then state_af_am_follows = true end
+                    end
+                elseif #afs ~= expected_afs then
+                    if not (af_high == 250 or state_af_am_follows) then
+                        local freq = (af_high+875)/10
+                        local found
+                        for _, value in ipairs(afs) do
+                            if value == freq then
+                                found = true
+                                break
+                            end
+                        end
+                        if not found then table.insert(afs, freq) end
+                    end
+                    if state_af_am_follows then state_af_am_follows = false end
+                    if not (af_high == 250 or af_low == 205 or af_low == 250) then
+                        local freq = (af_low+875)/10
+                        local found
+                        for _, value in ipairs(afs) do
+                            if value == freq then
+                                found = true
+                                break
+                            end
+                        end
+                        if not found then table.insert(afs, freq) end
+                    end
+                    if af_low == 250 then state_af_am_follows = true end
+                end
             elseif group_type == 1 and group_version == 0 then
                 if d < 0 then return end
                 local variant = (c & 0x7000) >> 12
