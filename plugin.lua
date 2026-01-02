@@ -80,41 +80,15 @@ function db.count_records(key, value) end
 ---@return integer
 function db.char_conv(ch) end
 
----@param filename string
+---@param filename string|nil nil means workspace file
 ---@param section string
 ---@param key string
 ---@param value string
 function db.save_string(filename, section, key, value) end
 
----@param filename string
----@param section string
----@param key string
----@param value integer
-function db.save_integer(filename, section, key, value) end
-
----@param filename string
----@param section string
----@param key string
----@param value boolean
-function db.save_boolean(filename, section, key, value) end
-
----@param filename string
+---@param filename string|nil nil means workspace file
 ---@param section string
 ---@param key string
 ---@param defaultValue string
 ---@return string
 function db.load_string(filename, section, key, defaultValue) end
-
----@param filename string
----@param section string
----@param key string
----@param defaultValue integer|nil optional
----@return integer
-function db.load_integer(filename, section, key, defaultValue) end
-
----@param filename string
----@param section string
----@param key string
----@param defaultValue boolean|nil optional
----@return boolean
-function db.load_boolean(filename, section, key, defaultValue) end

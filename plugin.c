@@ -83,6 +83,7 @@ static const unsigned char EBU[127] = {
 static unsigned short console_mode = 0;
 static unsigned short stop_execution = 0;
 static unsigned short sticky = 0;
+static unsigned char workspaceFile[MAX_PATH] = "";
 
 const char* int_to_string(int value) {
     static char buffer[16];
@@ -376,103 +377,46 @@ int lua_CharConv(lua_State* localL) {
 }
 
 int lua_SaveString(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
     const char* section = luaL_checkstring(localL, 2);
     const char* key = luaL_checkstring(localL, 3);
     const char* value = luaL_checkstring(localL, 4);
+    if (lua_isstring(localL, 1)) {
+        const char* filename = luaL_checkstring(localL, 1);
 
-    char path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        WritePrivateProfileStringA(section, key, value, fullPath);
-    }
-    return 0;
-}
-
-int lua_SaveInteger(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
-    const char* section = luaL_checkstring(localL, 2);
-    const char* key = luaL_checkstring(localL, 3);
-    int value = luaL_checkinteger(localL, 4);
-
-    char valueStr[32];
-    snprintf(valueStr, 32, "%d", value);
-
-    char path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        WritePrivateProfileStringA(section, key, valueStr, fullPath);
-    }
-    return 0;
-}
-
-int lua_SaveBoolean(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
-    const char* section = luaL_checkstring(localL, 2);
-    const char* key = luaL_checkstring(localL, 3);
-    int value = lua_toboolean(localL, 4);
-
-    char path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        WritePrivateProfileStringA(section, key, value ? "1" : "0", fullPath);
-    }
+        char path[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+            char fullPath[MAX_PATH];
+            snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+            WritePrivateProfileStringA(section, key, value, fullPath);
+        }
+    } else if(lua_isnil(localL, 1)) WritePrivateProfileStringA(section, key, value, workspaceFile);
+    else luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
     return 0;
 }
 
 int lua_LoadString(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
     const char* section = luaL_checkstring(localL, 2);
     const char* key = luaL_checkstring(localL, 3);
     const char* defaultValue = luaL_optstring(localL, 4, "");
 
     char buffer[1024];
-    char path[MAX_PATH];
+    if (lua_isstring(localL, 1)) {
+        const char* filename = luaL_checkstring(localL, 1);
+        char path[MAX_PATH];
 
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        GetPrivateProfileStringA(section, key, defaultValue, buffer, 1024, fullPath);
+        if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
+            char fullPath[MAX_PATH];
+            snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
+            GetPrivateProfileStringA(section, key, defaultValue, buffer, 1024, fullPath);
+            lua_pushstring(localL, buffer);
+        } else lua_pushstring(localL, defaultValue);
+        return 1;
+    } else if(lua_isnil(localL, 1)) {
+        GetPrivateProfileStringA(section, key, defaultValue, buffer, 1024, workspaceFile);
         lua_pushstring(localL, buffer);
-    } else lua_pushstring(localL, defaultValue);
-    return 1;
-}
-
-int lua_LoadInteger(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
-    const char* section = luaL_checkstring(localL, 2);
-    const char* key = luaL_checkstring(localL, 3);
-    int defaultValue = luaL_optinteger(localL, 4, 0);
-
-    char path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        int value = GetPrivateProfileIntA(section, key, defaultValue, fullPath);
-        lua_pushinteger(localL, value);
-    } else lua_pushinteger(localL, defaultValue);
-    return 1;
-}
-
-int lua_LoadBoolean(lua_State* localL) {
-    const char* filename = luaL_checkstring(localL, 1);
-    const char* section = luaL_checkstring(localL, 2);
-    const char* key = luaL_checkstring(localL, 3);
-    int defaultValue = lua_toboolean(localL, 4);
-
-    char buffer[16];
-    char path[MAX_PATH];
-
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
-        char fullPath[MAX_PATH];
-        snprintf(fullPath, MAX_PATH, "%s\\RDS Spy\\%s", path, filename);
-        GetPrivateProfileStringA(section, key, defaultValue ? "1" : "0", buffer, 16, fullPath);
-        lua_pushboolean(localL, atoi(buffer) != 0);
-    } else lua_pushboolean(localL, defaultValue);
-    return 1;
+        return 1;
+    } else luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
+    return 0;
 }
 
 void lua_call_command(const char* Cmd, const char* Param) {
@@ -566,6 +510,10 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
         }
     } else if (_stricmp(Cmd, "CONFIGURE") == 0 || _stricmp(Cmd, "SHOW") == 0 || _stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_SHOW);
     else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_HIDE);
+    else if (_stricmp(Cmd, "SHOWHIDE") == 0) {
+        if(IsWindowVisible(hWnd)) ShowWindow(hWnd, SW_HIDE);
+        else ShowWindow(hWnd, SW_SHOW);
+    }
     else if (_stricmp(Cmd, "OPENWORKSPACE") == 0) {
         if(hWnd != NULL) {
             int value = GetPrivateProfileIntA("luahost", "Visible", 0, Param);
@@ -587,6 +535,8 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             WritePrivateProfileStringA("luahost", "Stick", (sticky != 0) ? "1" : "0", Param);
             WritePrivateProfileStringA("luahost", "Visible", IsWindowVisible(hWnd) ? "1" : "0", Param);
         }
+        memcpy(workspaceFile, Param, MAX_PATH);
+        workspaceFile[MAX_PATH-1] = 0;
         lua_call_command(Cmd, Param); // still call
     } else if (_stricmp(Cmd, "LUASCRIPT") == 0) { // custom
         char msg_buffer[255];
@@ -659,20 +609,8 @@ void InitLua() {
     lua_pushcfunction(L, lua_SaveString);
     lua_setfield(L, -2, "save_string");
 
-    lua_pushcfunction(L, lua_SaveInteger);
-    lua_setfield(L, -2, "save_integer");
-
-    lua_pushcfunction(L, lua_SaveBoolean);
-    lua_setfield(L, -2, "save_boolean");
-
     lua_pushcfunction(L, lua_LoadString);
     lua_setfield(L, -2, "load_string");
-
-    lua_pushcfunction(L, lua_LoadInteger);
-    lua_setfield(L, -2, "load_integer");
-
-    lua_pushcfunction(L, lua_LoadBoolean);
-    lua_setfield(L, -2, "load_boolean");
 
     lua_setglobal(L, "db");
 
