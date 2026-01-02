@@ -1,8 +1,5 @@
 set_console_mode(true)
 
-local last_pi = 0
-local last_super_pi = 0
-
 local ert_string = string.rep("_", 128)
 local rt_a = string.rep("_", 64)
 local rt_b = string.rep("_", 64)
@@ -481,27 +478,27 @@ local rtp_running = false
 
 local rtp_types = {
 	"DUMMY_CLASS",
-	"ITEM.TITLE", "ITEM.ALBUM", "ITEM.TRACKNUMBER",
-	"ITEM.ARTIST", "ITEM.COMPOSITION", "ITEM.MOVEMENT",
-	"ITEM.CONDUCTOR", "ITEM.COMPOSER", "ITEM.BAND",
-	"ITEM.COMMENT", "ITEM.GENRE", "INFO.NEWS",
-	"INFO.NEWS.LOCAL", "INFO.STOCKMARKET", "INFO.SPORT",
-	"INFO.LOTTERY", "INFO.HOROSCOPE", "INFO.DAILY_DIVERSION",
-	"INFO.HEALTH", "INFO.EVENT", "INFO.SCENE",
-	"INFO.CINEMA", "INFO.TV", "INFO.DATE_TIME",
-	"INFO.WEATHER", "INFO.TRAFFIC", "INFO.ALARM",
-	"INFO.ADVERTISEMENT", "INFO.URL", "INFO.OTHER",
-	"STATIONNAME.SHORT", "STATIONNAME.LONG", "PROGRAMME.NOW",
-	"PROGRAMME.NEXT", "PROGRAMME.PART", "PROGRAMME.HOST",
-	"PROGRAMME.EDITORIAL_STAFF", "PROGRAMME.FREQUENCY", "PROGRAMME.HOMEPAGE",
-	"PROGRAMME.SUBCHANNEL", "PHONE.HOTLINE", "PHONE.STUDIO",
-    "PHONE.OTHER", "SMS.STUDIO", "SMS.OTHER",
-	"EMAIL.HOTLINE", "EMAIL.STUDIO", "EMAIL.OTHER",
-	"MMS.OTHER", "CHAT", "CHAT.CENTRE",
-	"VOTE.QUESTION", "VOTE.CENTRE", "RFU_1",
-	"RFU_2", "PRIVATE_1", "PRIVATE_2",
-	"PRIVATE_3", "PLACE", "APPOINTMENT",
-	"IDENTIFIER", "PURCHASE", "GET_DATA"
+	"Item.Title", "Item.Album", "Item.Tracknumber",
+	"Item.Artist", "Item.Composition", "Item.Movement",
+	"Item.Conductor", "Item.Composer", "Item.Band",
+	"Item.Comment", "Item.Genre", "Info.News",
+	"Info.News.Local", "Info.Stockmarket", "Info.Sport",
+	"Info.Lottery", "Info.Horoscope", "Info.Daily_Diversion",
+	"Info.Health", "Info.Event", "Info.Scene",
+	"Info.Cinema", "Info.Tv", "Info.Date_time",
+	"Info.Weather", "Info.Traffic", "Info.Alarm",
+	"Info.Advertisement", "Info.URL", "Info.Other",
+	"Stationame.Short", "Stationname.Long", "Program.Now",
+	"Program.Next", "Program.Part", "Program.Host",
+	"Program.Editorial_Staff", "Program.Frequency", "Program.Homepage",
+	"Program.Subchannel", "Phone.Hotline", "Phone.Studio",
+    "Phone.Other", "SMS.Studio", "SMS.Other",
+	"Email.Hotline", "Email.Studio", "Email.Other",
+	"MMS.Other", "Chat", "Chat.Center",
+	"Vote.Question", "Vote.Center", "Rfu_1",
+	"Rfu_2", "Private_1", "Private_2",
+	"Private_3", "Place", "Appointment",
+	"Identifier", "Purchase", "GET_DATA"
 }
 
 local last_render_hash = 0
@@ -525,7 +522,7 @@ local function render_menu()
     set_font_size(26)
     if current_menu == 1 then
         set_font_size(72) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
-        out = out .. string.format("PI: %X (SPI: %X)\r\n", last_pi, last_super_pi)
+        out = out .. string.format("PI: %s\r\n", db.read_value("PI") or "----")
         out = out .. string.format("PS: %s", db.read_value("PS") or "--------")
     elseif current_menu == 2 and not menu_extended then
         out = out .. string.format("PTY: %d (%s / %s)\r\n", pty, pty_rds[pty+1], pty_rbds[pty+1])
@@ -543,8 +540,9 @@ local function render_menu()
         else out = out .. "-\r\n-\t\r\n" end
         out = out .. string.format("RAW %d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2)
     elseif current_menu == 3 then
-        local country_id = (last_pi & 0xF000) >> 12
-        local coverage_id = (last_pi & 0xF00) >> 8
+        local pi_code = tonumber(db.read_value("PI") or "0000", 16)
+        local country_id = (pi_code & 0xF000) >> 12
+        local coverage_id = (pi_code & 0xF00) >> 8
 
         out = out .. string.format("LPS: %s\r\n\r\n", lps_display)
 
@@ -607,13 +605,19 @@ function command(cmd, param)
         db.add_value("LocalTime", time_display_local)
         db.add_value("UTCTime", time_display_utc)
         -- TODO time error
+        db.add_value("RTP.RawData", string.format("%d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2))
+
+        local current_rt = rta_display
+        if not last_rt then current_rt = rtb_display end
+        db.add_value("RTP.Tag1", current_rt:sub(rtp_start1, rtp_start1+rtp_len1+1))
+        db.add_value("RTP.Tag2", current_rt:sub(rtp_start2, rtp_start2+rtp_len2+1))
+        db.add_value("RTP.Tag1Type", rtp_types[rtp_type1+1])
+        db.add_value("RTP.Tag2Type", rtp_types[rtp_type2+1])
     elseif cmd:lower() == "resetdata" then
         ert_string = string.rep("_", 128)
         rt_a = string.rep("_", 64)
         rt_b = string.rep("_", 64)
         odas = {}
-        last_pi = 0
-        last_super_pi = 0
         pty = 0
         tp = false
         ta = false
@@ -633,8 +637,6 @@ function command(cmd, param)
         rtp_type2 = 0
         rtp_start2 = 0
         rtp_len2 = 0
-    elseif cmd:lower() == "superpi" then
-        if #param <= 4 then last_super_pi = tonumber(param, 16) end
     end
 end
 
@@ -727,8 +729,6 @@ end
 function group(stream, b_corr, a, b, c, d, time)
     if stream ~= 0 and a ~= 0 then return
     elseif stream ~= 0 and not db.load_boolean("rdsspy.ini", "General", "Tunnelling", false) then return end
-
-    if a > 0 then last_pi = a end
 
     render_menu()
 
