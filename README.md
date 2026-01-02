@@ -10,3 +10,10 @@ Aside from all that, this it loads and executes the script at "%LOCALAPPDATA%\RD
 ## Why?
 
 Ask Jan Kolar why his funny little rds decoder doesn't have Enchanced RT (excluding the 0x6552 to ERT mapping of course)
+
+# Scripts
+Inside of the examples folder you have `basic.lua` which mostly replaced the `basic.dll` plugin in RDS Spy
+
+Note that you can double click on the buttons, if you try it
+
+Another note is that on menu 0 you have the PI and PS in a large font, why? democracy? or something like that ([forum post](https://pira.cz/forum/index.php?topic=1124.0))
