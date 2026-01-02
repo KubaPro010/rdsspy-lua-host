@@ -544,8 +544,8 @@ local function render_menu()
         if not last_rt then current_rt = rtb_display end
         out = out .. string.format("RTP\r\n\tRUNNING %s | TOGGLE %s\r\n\t", rtp_running and "+" or "-", rtp_toggle and "+" or "-")
         if rtp_running then
-            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type1+1], current_rt:sub(rtp_start1, rtp_start1+rtp_len1+1))
-            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type2+1], current_rt:sub(rtp_start2, rtp_start2+rtp_len2+1))
+            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type1+1], current_rt:sub(rtp_start1+1, rtp_start1+rtp_len1+1))
+            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type2+1], current_rt:sub(rtp_start2+1, rtp_start2+rtp_len2+1))
         else out = out .. "-\r\n-\t\r\n" end
         out = out .. string.format("RAW %d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2)
     elseif current_menu == 3 then
@@ -618,8 +618,8 @@ function command(cmd, param)
 
         local current_rt = rta_display
         if not last_rt then current_rt = rtb_display end
-        db.add_value("RTP.Tag1", current_rt:sub(rtp_start1, rtp_start1+rtp_len1+1))
-        db.add_value("RTP.Tag2", current_rt:sub(rtp_start2, rtp_start2+rtp_len2+1))
+        db.add_value("RTP.Tag1", current_rt:sub(rtp_start1+1, rtp_start1+rtp_len1+1))
+        db.add_value("RTP.Tag2", current_rt:sub(rtp_start2+1, rtp_start2+rtp_len2+1))
         db.add_value("RTP.Tag1Type", rtp_types[rtp_type1+1])
         db.add_value("RTP.Tag2Type", rtp_types[rtp_type2+1])
     elseif cmd:lower() == "resetdata" then
