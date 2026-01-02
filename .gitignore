@@ -1,2 +1,3 @@
 *.dll
 liblua
+liblua.native
