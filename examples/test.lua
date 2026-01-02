@@ -546,7 +546,7 @@ local function render_menu()
         if rtp_running then
             out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type1+1], current_rt:sub(rtp_start1+1, rtp_start1+rtp_len1+1))
             out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type2+1], current_rt:sub(rtp_start2+1, rtp_start2+rtp_len2+1))
-        else out = out .. "-\r\n-\t\r\n" end
+        else out = out .. "-\r\n\t-\r\n\t" end
         out = out .. string.format("RAW %d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2)
     elseif current_menu == 3 then
         local pi_code = tonumber(db.read_value("PI") or "0000", 16)
