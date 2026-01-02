@@ -14,7 +14,7 @@ local ptyn = string.rep(" ", 8)
 local odas = {}
 local ert_display = ""
 
-local last_rt = false
+local last_rt = true
 local rta_display = ""
 local rtb_display = ""
 local lps_display = ""
@@ -56,7 +56,7 @@ local dpty = false
 
 local ecc = 0
 local pi_code_to_country = {
-    "Encoder fault",
+    "Encoder fault / PI not received",
     "CM DE GR KW MA MD ME NA SL AI BO GT PR US VI AUS-CT KI LA",
     "CF CZ DZ EE IE LR QA ZW AG CO HN PR US VI AUS-NSW BT TH",
     "PL AD DJ EH GH KG MK MZ SM TR AW BR JM PR US VI AUS-V BD KH TO",
@@ -457,6 +457,25 @@ local pi_ecc_to_country = {
     },
 }
 
+local pi_coverage = {
+    "Local",
+    "International",
+    "National",
+    "Supra-regional",
+    "Regional 4",
+    "Regional 5",
+    "Regional 5",
+    "Regional 7",
+    "Regional 8",
+    "Regional 9",
+    "Regional A",
+    "Regional B",
+    "Regional C",
+    "Regional D",
+    "Regional E",
+    "Regional F",
+}
+
 local last_render_hash = 0
 local function crc(data)
     local crc = 0xFF
@@ -476,27 +495,29 @@ end
 
 function render_menu()
     out = string.format("Menu %d\r\n------\r\n", current_menu)
+    set_font_size(26)
     if current_menu == 1 then
-        set_font_size(64) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
+        set_font_size(72) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
         out = out .. string.format("PI: %X (SPI: %X)\r\n", last_pi, last_super_pi)
-        out = out .. string.format("PS: %s", db.read_value("PS"))
+        out = out .. string.format("PS: %s", db.read_value("PS") or "--------")
     elseif current_menu == 2 then
-        set_font_size(24)
         out = out .. string.format("PTY: %d (%s / %s)\r\n", pty, pty_rds[pty+1], pty_rbds[pty+1])
         out = out .. string.format("TP %s | TA %s | DPTY %s\r\n", tp and "+" or "-", ta and "+" or "-", dpty and "+" or "-")
         out = out .. string.format("PTYN: %s\r\n\r\n", ptyn)
         out = out .. string.format("RT[A]: %s%s\r\n", last_rt and ">" or " ", rta_display)
         out = out .. string.format("RT[B]: %s%s\r\n\r\n", (not last_rt) and ">" or " ", rtb_display)
     elseif current_menu == 3 then
-        set_font_size(24)
+        local country_id = (last_pi & 0xF000) >> 12
+        local coverage_id = (last_pi & 0xF00) >> 8
+
         out = out .. string.format("LPS: %s\r\n\r\n", lps_display)
 
         local country_name = "Unknown"
-        local country_id = (last_pi & 0xF000) >> 12
         local ecc_key = string.format("%x", ecc)
 
         if ecc ~= 0 and pi_ecc_to_country[ecc_key] and pi_ecc_to_country[ecc_key][country_id + 1] then country_name = pi_ecc_to_country[ecc_key][country_id + 1]
         elseif ecc == 0 then country_name = pi_code_to_country[country_id+1] end
+        out = out .. string.format("Coverage: %s\r\n", pi_coverage[coverage_id+1])
         out = out .. string.format("Country: %s (%X)\r\n\r\n", country_name, ecc)
 
         out = out .. string.format("ERT: %s\r\n\r\n", ert_display)
@@ -518,6 +539,7 @@ end
 
 function event(event)
     current_menu = event
+    render_menu()
 end
 
 local function ternary(cond, a, b)
@@ -554,7 +576,7 @@ function command(cmd, param)
         ecc = 0
         lps = string.rep("_", 32)
     elseif cmd:lower() == "superpi" then
-        last_super_pi = tonumber(param, 16)
+        if #param <= 4 then last_super_pi = tonumber(param, 16) end
     end
 end
 
@@ -569,9 +591,11 @@ function group(stream, b_corr, a, b, c, d)
     if stream ~= 0 and a ~= 0 then return
     elseif stream ~= 0 and not db.load_boolean("rdsspy.ini", "General", "Tunnelling", false) then return end
 
-    if a ~= 0 then last_pi = a end
+    if a > 0 then last_pi = a end
 
-    if b_corr or b < 0 or c < 0 or d < 0 then return end
+    render_menu()
+
+    if b_corr or b < 0 then return end
 
     pty = (b >> 5) & 0x1f
     tp = ((b >> 10) & 1) ~= 0
@@ -580,6 +604,7 @@ function group(stream, b_corr, a, b, c, d)
     local group_version = (b & 0x800) >> 11
 
     if group_type == 3 and group_version == 0 then
+        if d < 0 then return end
         local target_group = (b & 0x1f) >> 1
 
         if odas[target_group] == nil then odas[target_group] = { aid = d, version = (b & 1) } end
@@ -603,6 +628,7 @@ function group(stream, b_corr, a, b, c, d)
                 if di_bit and segment == 0 then dpty = true
                 elseif segment == 0 then dpty = false end
             elseif group_type == 1 and group_version == 0 then
+                if d < 0 then return end
                 local variant = (c & 0x7000) >> 12
                 if variant == 0 then ecc = c & 0xfff end
             elseif group_type == 10 and group_version == 0 then
@@ -613,24 +639,42 @@ function group(stream, b_corr, a, b, c, d)
                 end
                 local segment = b & 1
                 local start_pos = (segment * 4) + 1
-                local new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
-                ptyn = ptyn:sub(1, start_pos - 1) .. new_chars .. ptyn:sub(start_pos + 4)
+                local new_chars
+                if d > 0 and c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                elseif c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff))
+                elseif d > 0 then
+                    new_chars = ptyn:sub(start_pos, start_pos + 1) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                else return end
+                ptyn = ptyn:sub(1, start_pos - 1) .. new_chars .. ptyn:sub(start_pos + #new_chars)
             elseif group_type == 2 and group_version == 0 then -- TODO 2B
                 local rt_state = b & 0xF
                 local rt_toggle = (b >> 4) & 1
-                local new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
                 local start_pos = (rt_state * 4) + 1
 
+                local new_chars
+                if d > 0 and c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                elseif c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff))
+                elseif d > 0 then
+                    if rt_toggle == 0 then new_chars = rt_a:sub(start_pos, start_pos + 1) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                    else new_chars = rt_b:sub(start_pos, start_pos + 1) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff)) end
+                else return end
+
                 if rt_toggle == 0 then
+                    if last_rt ~= true then rt_a = string.rep("_", 64) end
                     last_rt = true
-                    rt_a = rt_a:sub(1, start_pos - 1) .. new_chars .. rt_a:sub(start_pos + 4)
+                    rt_a = rt_a:sub(1, start_pos - 1) .. new_chars .. rt_a:sub(start_pos + #new_chars)
 
                     local carriage = rt_a:find("\r", 1, true)
                     if carriage then rta_display = rt_a:sub(1, carriage - 1)
                     else rta_display = rt_a:gsub("%s+$", "") end
                 else
+                    if last_rt ~= false then rt_b = string.rep("_", 64) end
                     last_rt = false
-                    rt_b = rt_b:sub(1, start_pos - 1) .. new_chars .. rt_b:sub(start_pos + 4)
+                    rt_b = rt_b:sub(1, start_pos - 1) .. new_chars .. rt_b:sub(start_pos + #new_chars)
 
                     local carriage = rt_b:find("\r", 1, true)
                     if carriage then rtb_display = rt_b:sub(1, carriage - 1)
@@ -638,10 +682,16 @@ function group(stream, b_corr, a, b, c, d)
                 end
             elseif group_type == 15 and group_version == 0 then
                 local state = b & 7
-                local new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
                 local start_pos = (state * 4) + 1
-
-                lps = lps:sub(1, start_pos - 1) .. new_chars .. lps:sub(start_pos + 4)
+                local new_chars
+                if d > 0 and c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff)) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                elseif c > 0 then
+                    new_chars = string.char(db.char_conv((c >> 8) & 0xff)) .. string.char(db.char_conv(c & 0xff))
+                elseif d > 0 then
+                    new_chars = lps:sub(start_pos, start_pos + 1) .. string.char(db.char_conv((d >> 8) & 0xff)) .. string.char(db.char_conv(d & 0xff))
+                else return end
+                lps = lps:sub(1, start_pos - 1) .. new_chars .. lps:sub(start_pos + #new_chars)
 
                 local carriage = lps:find("\r", 1, true)
                 if carriage then lps_display = lps:sub(1, carriage - 1)
@@ -649,6 +699,6 @@ function group(stream, b_corr, a, b, c, d)
             end
         end
     end
-
     render_menu()
 end
+render_menu()
