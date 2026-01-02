@@ -80,8 +80,9 @@ static const unsigned char EBU[127] = {
     0x00, 0x00, 0x00, 0xFD, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xE6, 0x9C, 0x9F, 0x00
 };
 
-static unsigned int console_mode = 0;
-static unsigned int stop_execution = 0;
+static unsigned short console_mode = 0;
+static unsigned short stop_execution = 0;
+static unsigned short sticky = 0;
 
 const char* int_to_string(int value) {
     static char buffer[16];
@@ -225,6 +226,17 @@ int lua_set_console_mode(lua_State* localL) {
     SetText("");
     console_mode = mode;
     return 0;
+}
+
+int lua_set_window_stick(lua_State* localL) {
+    if (!lua_isboolean(localL, 1)) return luaL_error(localL, "boolean expected, got %s", luaL_typename(localL, 1));
+    sticky = lua_toboolean(localL, 1);
+    return 0;
+}
+
+int lua_get_window_stick(lua_State* localL) {
+    lua_pushboolean(localL, sticky);
+    return 1;
 }
 
 int lua_set_font_size(lua_State* localL) {
@@ -552,8 +564,7 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             lua_close(L);
             L = NULL;
         }
-    } else if (_stricmp(Cmd, "CONFIGURE") == 0) ShowWindow(hWnd, SW_SHOW);
-    else if (_stricmp(Cmd, "SHOW") == 0) ShowWindow(hWnd, SW_SHOW);
+    } else if (_stricmp(Cmd, "CONFIGURE") == 0 || _stricmp(Cmd, "SHOW") == 0) ShowWindow(hWnd, SW_SHOW);
     else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_MINIMIZE);
     else if (_stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_RESTORE);
     else if (_stricmp(Cmd, "OPENWORKSPACE") == 0) {
@@ -565,6 +576,7 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             int y = GetPrivateProfileIntA("luahost", "Top", 240, Param);
             SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOSIZE);
         }
+        sticky = GetPrivateProfileIntA("luahost", "Stick", 0, Param);
         lua_call_command(Cmd, Param); // still call
     } else if (_stricmp(Cmd, "SAVEWORKSPACE") == 0) {
         if(hWnd != NULL) {
@@ -573,6 +585,7 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
                 WritePrivateProfileStringA("luahost", "Left", int_to_string(rect.left), Param);
                 WritePrivateProfileStringA("luahost", "Top", int_to_string(rect.top), Param);
             }
+            WritePrivateProfileStringA("luahost", "Stick", (sticky != 0) ? "1" : "0", Param);
             WritePrivateProfileStringA("luahost", "Visible", IsWindowVisible(hWnd) ? "1" : "0", Param);
         }
         lua_call_command(Cmd, Param); // still call
@@ -582,13 +595,27 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             snprintf(msg_buffer, sizeof(msg_buffer), "Lua error loading file: %s\r\n", lua_tostring(L, -1));
             AppendText(msg_buffer);
             lua_pop(L, 1);
+            stop_execution = 1;
         } else {
             if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
                 snprintf(msg_buffer, sizeof(msg_buffer), "Init error: %s\r\n", lua_tostring(L, -1));
                 AppendText(msg_buffer);
                 lua_pop(L, 1);
+                stop_execution = 1;
             }
         }
+    } else if(_stricmp(Cmd, "MOVEX") == 0) {
+        if(sticky != 0) {
+            RECT rect; // get rect
+            if (GetWindowRect(hWnd, &rect)) SetWindowPos(hWnd, NULL, rect.left+atoi(Param), rect.top, 0, 0, SWP_NOSIZE);
+        }
+        lua_call_command(Cmd, Param);
+    } else if(_stricmp(Cmd, "MOVEY") == 0) {
+        if(sticky != 0) {
+            RECT rect; // get rect
+            if (GetWindowRect(hWnd, &rect)) SetWindowPos(hWnd, NULL, rect.left, rect.top+atoi(Param), 0, 0, SWP_NOSIZE);
+        }
+        lua_call_command(Cmd, Param);
     } else lua_call_command(Cmd, Param);
 }
 
@@ -606,6 +633,8 @@ void InitLua() {
     lua_register(L, "log", lua_log);
     lua_register(L, "set_console", lua_set_console);
     lua_register(L, "set_console_mode", lua_set_console_mode);
+    lua_register(L, "set_window_stick", lua_set_window_stick);
+    lua_register(L, "get_window_stick", lua_get_window_stick);
 
     lua_pushinteger(L, BUTTON_COUNT);
     lua_setglobal(L, "event_count");

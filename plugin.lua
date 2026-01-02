@@ -51,6 +51,12 @@ function set_console(data) end
 ---@param mode boolean
 function set_console_mode(mode) end
 
+---Settings this on makes the window move with the main RDS Spy window regardless the console is
+---@param stick boolean
+function set_window_stick(stick) end
+---@return boolean
+function get_window_stick() end
+
 db = {}
 
 ---@param key string

@@ -576,6 +576,9 @@ local function render_menu()
         else out = out .. string.format("RDS-System time offset: ~0\r\n") end
         out = out .. string.format("Local time: %s\r\n", time_display_local)
         out = out .. string.format("UTC time: %s\r\n", time_display_utc)
+    elseif current_menu == event_count then
+        out = out .. "Toggled windows stickness"
+        set_window_stick(not get_window_stick())
     end
 
     local hash = crc(out)
