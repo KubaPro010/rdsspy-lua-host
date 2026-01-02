@@ -1,10 +1,22 @@
 ---@meta
 
+---@type integer
+event_count = 0
+
 ---This function should be defined by the user in the script
 ---EXIT, CONFIGURE, SHOW, MINIMIZE, RESTORE commands are not sent to the script
 ---@param cmd string
 ---@param param string
 function command(cmd, param) end
+
+---@class timetable
+---@field year integer
+---@field month integer
+---@field day integer
+---@field hour integer
+---@field minute integer
+---@field second integer
+---@field centisecond integer
 
 ---This function should be defined by the user in the script
 ---@param stream integer
@@ -13,7 +25,8 @@ function command(cmd, param) end
 ---@param b integer
 ---@param c integer
 ---@param d integer
-function group(stream, block_b_correction, a, b, c, d) end
+---@param time timetable
+function group(stream, block_b_correction, a, b, c, d, time) end
 
 ---This function should be defined by the user in the script
 ---@param event integer

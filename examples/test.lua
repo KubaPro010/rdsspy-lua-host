@@ -20,6 +20,7 @@ local rtb_display = ""
 local lps_display = ""
 
 local current_menu = 1
+local menu_extended = false
 
 local pty_rds = {
     "None", "News", "Current Affairs",
@@ -496,8 +497,8 @@ local function crc(data)
     return crc
 end
 
-function render_menu()
-    out = string.format("Menu %d\r\n------\r\n", current_menu)
+local function render_menu()
+    local out = string.format("Menu %d%s\r\n------\r\n", current_menu, menu_extended and " (extended)" or "")
     set_font_size(26)
     if current_menu == 1 then
         set_font_size(72) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
@@ -532,8 +533,7 @@ function render_menu()
         end
         out = out .. string.format("ODA: %s\r\n", oda_string:sub(1, #oda_string-2))
     elseif current_menu == 4 then
-        if time_display_offset > 2 then
-            out = out .. string.format("RDS-System time offset: %d seconds\r\n", time_display_offset)
+        if time_display_offset > 2 then out = out .. string.format("RDS-System time offset: %d seconds\r\n", time_display_offset)
         else out = out .. string.format("RDS-System time offset: ~0\r\n") end
         out = out .. string.format("Local time: %s\r\n", time_display_local)
         out = out .. string.format("UTC time: %s\r\n", time_display_utc)
@@ -547,7 +547,10 @@ function render_menu()
 end
 
 function event(event)
-    current_menu = event
+    if event > event_count then menu_extended = true else
+        menu_extended = false
+        current_menu = event
+    end
     render_menu()
 end
 
@@ -569,6 +572,9 @@ function command(cmd, param)
         db.add_value("PTY.Name", string.format("%s / %s", pty_rds[pty+1], pty_rbds[pty+1]))
         db.add_value("ECC", string.format("%X", ecc))
         db.add_value("LPS", lps_display)
+        db.add_value("LocalTime", time_display_local)
+        db.add_value("UTCTime", time_display_utc)
+        -- TODO time error
     elseif cmd:lower() == "resetdata" then
         ert_string = string.rep("_", 128)
         rt_a = string.rep("_", 64)
@@ -671,7 +677,14 @@ local function getDayOfWeek(year, month, day)
     return ((h + 5) % 7) + 1
 end
 
-function group(stream, b_corr, a, b, c, d)
+---@param stream integer
+---@param b_corr boolean
+---@param a integer
+---@param b integer
+---@param c integer
+---@param d integer
+---@param time timetable
+function group(stream, b_corr, a, b, c, d, time)
     if stream ~= 0 and a ~= 0 then return
     elseif stream ~= 0 and not db.load_boolean("rdsspy.ini", "General", "Tunnelling", false) then return end
 
@@ -782,7 +795,6 @@ function group(stream, b_corr, a, b, c, d)
                 else lps_display = lps:gsub("%s+$", "") end
             elseif group_type == 4 and group_version == 0 then
                 if d < 0 or c < 0 then return end
-                local system_time = os.time()
                 local mjd = ((b & 7) << 15) | c >> 1
                 local year = math.floor((mjd - 15078.2) / 365.25)
                 local month = math.floor((mjd - 14956.1 - math.floor(year * 365.25)) / 30.6001)
@@ -802,10 +814,11 @@ function group(stream, b_corr, a, b, c, d)
                 local weekday_table = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
                 time_display_utc = string.format("%d/%02d/%02d (%s) - %02d:%02d", utc_year, utc_month, utc_day, weekday_table[getDayOfWeek(utc_year, utc_month, utc_day)], utc_hour, utc_minute)
 
-                time_display_offset = os.difftime(system_time, epoch+1735689600)
-
                 if offset_sign == 0 then epoch = epoch + (offset*1800)
                 else epoch = epoch - (offset*1800) end
+
+                local systemepoch = dateToEpoch(time.year, time.month, time.day) + (time.hour * 3600) + (time.minute * 60) + time.second + (time.centisecond * 0.01)
+                time_display_offset = math.floor(math.abs(epoch - systemepoch))
 
                 local local_year, local_month, local_day, local_hour, local_minute = epochToDate(epoch)
                 time_display_local = string.format("%d/%02d/%02d (%s) - %02d:%02d", local_year, local_month, local_day, weekday_table[getDayOfWeek(local_year, local_month, local_day)], local_hour, local_minute)

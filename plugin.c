@@ -12,7 +12,7 @@ typedef struct {
     uint8_t Month;
     uint8_t Day;
     uint8_t Hour;
-    uint8_t Minutes;
+    uint8_t Minute;
     uint8_t Second;
     uint8_t Centisecond;
     uint16_t RFU;
@@ -81,6 +81,7 @@ static const unsigned char EBU[127] = {
 };
 
 static unsigned int console_mode = 0;
+static unsigned int stop_execution = 0;
 
 const char* int_to_string(int value) {
     static char buffer[16];
@@ -113,7 +114,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int offset = 0;
                 if(HIWORD(wParam) == BN_DOUBLECLICKED) offset = BUTTON_COUNT;
 
-                if (controlId == IDC_MAIN_BUTTON) InitLua();
+                if (controlId == IDC_MAIN_BUTTON && HIWORD(wParam) == BN_DOUBLECLICKED) InitLua();
                 else if (controlId > IDC_MAIN_BUTTON && controlId <= IDC_MAIN_BUTTON + BUTTON_COUNT) lua_event((controlId - IDC_MAIN_BUTTON) + offset);
             }
             break;
@@ -156,7 +157,7 @@ void CreatePluginWindow(HWND hOwner) {
 
     HWND hButton = CreateWindowEx(
         0, "BUTTON", "Reload",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_NOTIFY,
         10, WINDOW_HEIGHT-62,
         70, 30, hWnd,
         (HMENU)IDC_MAIN_BUTTON, hInst, NULL
@@ -463,6 +464,7 @@ int lua_LoadBoolean(lua_State* localL) {
 }
 
 void lua_call_command(const char* Cmd, const char* Param) {
+    if(stop_execution != 0) return;
     lua_getglobal(L, "command");
 
     if (lua_isfunction(L, -1)) {
@@ -473,11 +475,13 @@ void lua_call_command(const char* Cmd, const char* Param) {
             snprintf(msg_buffer, sizeof(msg_buffer), "Lua error: %s at '%s'\n", lua_tostring(L, -1), "command");
             AppendText(msg_buffer);
             lua_pop(L, 1);
+            stop_execution = 1;
         }
     } else lua_pop(L, 1);
 }
 
 void lua_call_group() {
+    if(stop_execution != 0) return;
     lua_getglobal(L, "group");
 
     if (lua_isfunction(L, -1)) {
@@ -487,16 +491,35 @@ void lua_call_group() {
         lua_pushinteger(L, Group.Blk2);
         lua_pushinteger(L, Group.Blk3);
         lua_pushinteger(L, Group.Blk4);
-        if (lua_pcall(L, 6, 0, 0) != LUA_OK) {
+
+        lua_newtable(L);
+        lua_pushinteger(L, Group.Year);
+        lua_setfield(L, -2, "year");
+        lua_pushinteger(L, Group.Month);
+        lua_setfield(L, -2, "month");
+        lua_pushinteger(L, Group.Day);
+        lua_setfield(L, -2, "day");
+        lua_pushinteger(L, Group.Hour);
+        lua_setfield(L, -2, "hour");
+        lua_pushinteger(L, Group.Minute);
+        lua_setfield(L, -2, "minute");
+        lua_pushinteger(L, Group.Second);
+        lua_setfield(L, -2, "second");
+        lua_pushinteger(L, Group.Centisecond);
+        lua_setfield(L, -2, "centisecond");
+
+        if (lua_pcall(L, 7, 0, 0) != LUA_OK) {
             char msg_buffer[255];
             snprintf(msg_buffer, sizeof(msg_buffer), "Lua error: %s at '%s'\r\n", lua_tostring(L, -1), "group");
             AppendText(msg_buffer);
             lua_pop(L, 1);
+            stop_execution = 1;
         }
     } else lua_pop(L, 1);
 }
 
 void lua_event(int event) {
+    if(stop_execution != 0) return;
     lua_getglobal(L, "event");
 
     if (lua_isfunction(L, -1)) {
@@ -506,6 +529,7 @@ void lua_event(int event) {
             snprintf(msg_buffer, sizeof(msg_buffer), "Lua error: %s at '%s'\r\n", lua_tostring(L, -1), "event");
             AppendText(msg_buffer);
             lua_pop(L, 1);
+            stop_execution = 1;
         }
     } else lua_pop(L, 1);
 }
@@ -583,6 +607,9 @@ void InitLua() {
     lua_register(L, "set_console", lua_set_console);
     lua_register(L, "set_console_mode", lua_set_console_mode);
 
+    lua_pushinteger(L, BUTTON_COUNT);
+    lua_setglobal(L, "event_count");
+
     lua_newtable(L);
 
     lua_pushcfunction(L, lua_ReadValue);
@@ -624,6 +651,7 @@ void InitLua() {
     lua_setglobal(L, "db");
 
     console_mode = 0;
+    stop_execution = 0;
 
     char path[MAX_PATH];
     char fullPath[MAX_PATH];
@@ -640,11 +668,13 @@ void InitLua() {
         snprintf(msg_buffer, sizeof(msg_buffer), "Lua error loading file: %s\r\n", lua_tostring(L, -1));
         AppendText(msg_buffer);
         lua_pop(L, 1);
+        stop_execution = 1;
     } else {
         if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
             snprintf(msg_buffer, sizeof(msg_buffer), "Lua error: %s\r\n", lua_tostring(L, -1));
             AppendText(msg_buffer);
             lua_pop(L, 1);
+            stop_execution = 1;
         }
     }
 }
