@@ -458,21 +458,11 @@ local pi_ecc_to_country = {
 }
 
 local pi_coverage = {
-    "Local",
-    "International",
-    "National",
-    "Supra-regional",
-    "Regional 4",
-    "Regional 5",
-    "Regional 5",
-    "Regional 7",
-    "Regional 8",
-    "Regional 9",
-    "Regional A",
-    "Regional B",
-    "Regional C",
-    "Regional D",
-    "Regional E",
+    "Local", "International", "National",
+    "Supra-regional", "Regional 4", "Regional 5",
+    "Regional 5", "Regional 7", "Regional 8",
+    "Regional 9", "Regional A", "Regional B",
+    "Regional C", "Regional D", "Regional E",
     "Regional F",
 }
 
@@ -480,21 +470,54 @@ local time_display_utc = "-"
 local time_display_local = "-"
 local time_display_offset = 0
 
+local rtp_len1 = 0
+local rtp_len2 = 0
+local rtp_type1 = 0
+local rtp_type2 = 0
+local rtp_start1 = 0
+local rtp_start2 = 0
+local rtp_toggle = false
+local rtp_running = false
+
+local rtp_types = {
+	"DUMMY_CLASS",
+	"ITEM.TITLE", "ITEM.ALBUM", "ITEM.TRACKNUMBER",
+	"ITEM.ARTIST", "ITEM.COMPOSITION", "ITEM.MOVEMENT",
+	"ITEM.CONDUCTOR", "ITEM.COMPOSER", "ITEM.BAND",
+	"ITEM.COMMENT", "ITEM.GENRE", "INFO.NEWS",
+	"INFO.NEWS.LOCAL", "INFO.STOCKMARKET", "INFO.SPORT",
+	"INFO.LOTTERY", "INFO.HOROSCOPE", "INFO.DAILY_DIVERSION",
+	"INFO.HEALTH", "INFO.EVENT", "INFO.SCENE",
+	"INFO.CINEMA", "INFO.TV", "INFO.DATE_TIME",
+	"INFO.WEATHER", "INFO.TRAFFIC", "INFO.ALARM",
+	"INFO.ADVERTISEMENT", "INFO.URL", "INFO.OTHER",
+	"STATIONNAME.SHORT", "STATIONNAME.LONG", "PROGRAMME.NOW",
+	"PROGRAMME.NEXT", "PROGRAMME.PART", "PROGRAMME.HOST",
+	"PROGRAMME.EDITORIAL_STAFF", "PROGRAMME.FREQUENCY", "PROGRAMME.HOMEPAGE",
+	"PROGRAMME.SUBCHANNEL", "PHONE.HOTLINE", "PHONE.STUDIO",
+    "PHONE.OTHER", "SMS.STUDIO", "SMS.OTHER",
+	"EMAIL.HOTLINE", "EMAIL.STUDIO", "EMAIL.OTHER",
+	"MMS.OTHER", "CHAT", "CHAT.CENTRE",
+	"VOTE.QUESTION", "VOTE.CENTRE", "RFU_1",
+	"RFU_2", "PRIVATE_1", "PRIVATE_2",
+	"PRIVATE_3", "PLACE", "APPOINTMENT",
+	"IDENTIFIER", "PURCHASE", "GET_DATA"
+}
+
 local last_render_hash = 0
 local function crc(data)
-    local crc = 0xFF
+    local sum = 0xFF
 
     for i = 1, #data do
-        crc = crc ~ data:byte(i)
-
+        sum = sum ~ data:byte(i)
         for _ = 1, 8 do
-            if (crc & 0x80) ~= 0 then crc = (crc << 1) ~ 0x7
-            else crc = crc << 1 end
-            crc = crc & 0xFF
+            if (sum & 0x80) ~= 0 then sum = (sum << 1) ~ 0x7
+            else sum = sum << 1 end
+            sum = sum & 0xFF
         end
     end
 
-    return crc
+    return sum
 end
 
 local function render_menu()
@@ -504,12 +527,21 @@ local function render_menu()
         set_font_size(72) -- largest as i can do, this is directly from the public's wants (https://pira.cz/forum/index.php?topic=1124.0)
         out = out .. string.format("PI: %X (SPI: %X)\r\n", last_pi, last_super_pi)
         out = out .. string.format("PS: %s", db.read_value("PS") or "--------")
-    elseif current_menu == 2 then
+    elseif current_menu == 2 and not menu_extended then
         out = out .. string.format("PTY: %d (%s / %s)\r\n", pty, pty_rds[pty+1], pty_rbds[pty+1])
         out = out .. string.format("TP %s | TA %s | DPTY %s\r\n", tp and "+" or "-", ta and "+" or "-", dpty and "+" or "-")
         out = out .. string.format("PTYN: %s\r\n\r\n", ptyn)
         out = out .. string.format("RT[A]: %s%s\r\n", last_rt and ">" or " ", rta_display)
         out = out .. string.format("RT[B]: %s%s\r\n\r\n", (not last_rt) and ">" or " ", rtb_display)
+    elseif current_menu == 2 and menu_extended then
+        local current_rt = rta_display
+        if not last_rt then current_rt = rtb_display end
+        out = out .. string.format("RTP\r\n\tRUNNING %s | TOGGLE %s\r\n\t", rtp_running and "+" or "-", rtp_toggle and "+" or "-")
+        if rtp_running then
+            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type1+1], current_rt:sub(rtp_start1, rtp_start1+rtp_len1+1))
+            out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type2+1], current_rt:sub(rtp_start2, rtp_start2+rtp_len2+1))
+        else out = out .. "-\r\n-\t\r\n" end
+        out = out .. string.format("RAW %d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2)
     elseif current_menu == 3 then
         local country_id = (last_pi & 0xF000) >> 12
         local coverage_id = (last_pi & 0xF00) >> 8
@@ -593,6 +625,14 @@ function command(cmd, param)
         time_display_utc = "-"
         time_display_local = "-"
         time_display_offset = 0
+        rtp_running = false
+        rtp_running = false
+        rtp_type1 = 0
+        rtp_start1 = 0
+        rtp_len1 = 0
+        rtp_type2 = 0
+        rtp_start2 = 0
+        rtp_len2 = 0
     elseif cmd:lower() == "superpi" then
         if #param <= 4 then last_super_pi = tonumber(param, 16) end
     end
@@ -707,8 +747,10 @@ function group(stream, b_corr, a, b, c, d, time)
         if odas[target_group] == nil then odas[target_group] = { aid = d, version = (b & 1) } end
     else
         local ert_grp, ert_ver = findODAByAID(odas, 0x6552)
+        local rtp_grp, rtp_ver = findODAByAID(odas, 0x4BD7)
 
         if ert_grp and group_type == ert_grp and group_version == ert_ver then
+            if d < 0 or c < 0 then return end
             local ert_state = b & 0x1f
             local new_chars = string.char((c >> 8) & 0xff) .. string.char(c & 0xff) .. string.char((d >> 8) & 0xff) .. string.char(d & 0xff)
             local start_pos = (ert_state * 4) + 1
@@ -717,6 +759,16 @@ function group(stream, b_corr, a, b, c, d, time)
             local carriage = ert_string:find("\r", 1, true)
             if carriage then ert_display = ert_string:sub(1, carriage - 1)
             else ert_display = ert_string:gsub("%s+$", "") end
+        elseif rtp_grp and group_type == rtp_grp and group_version == rtp_ver then
+            if d < 0 or c < 0 then return end
+            rtp_toggle = ((b & 0x10) >> 4) ~= 0
+            rtp_running = ((b & 8) >> 3) ~= 0
+            rtp_type1 = (b & 7) << 3 | (c & 0xe000) >> 13
+            rtp_start1 = (c & 0x1f80) >> 7
+            rtp_len1 = (c >> 1) & 63
+            rtp_type2  = ((c & 1) << 6) | (d >> 11) & 63
+            rtp_start2 = (d >> 5) & 63
+            rtp_len2 = d & 0x1f
         else
             if group_type == 0 then
                 ta = ((b & 0x10) >> 4) ~= 0
