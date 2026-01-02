@@ -19,7 +19,6 @@ local rta_display = ""
 local rtb_display = ""
 local lps_display = ""
 
-
 local current_menu = 1
 
 local pty_rds = {
@@ -476,6 +475,10 @@ local pi_coverage = {
     "Regional F",
 }
 
+local time_display_utc = "-"
+local time_display_local = "-"
+local time_display_offset = 0
+
 local last_render_hash = 0
 local function crc(data)
     local crc = 0xFF
@@ -528,6 +531,12 @@ function render_menu()
             oda_string = oda_string .. string.format("%d%s - %04X | ", grp, ver_char, data.aid)
         end
         out = out .. string.format("ODA: %s\r\n", oda_string:sub(1, #oda_string-2))
+    elseif current_menu == 4 then
+        if time_display_offset > 2 then
+            out = out .. string.format("RDS-System time offset: %d seconds\r\n", time_display_offset)
+        else out = out .. string.format("RDS-System time offset: ~0\r\n") end
+        out = out .. string.format("Local time: %s\r\n", time_display_local)
+        out = out .. string.format("UTC time: %s\r\n", time_display_utc)
     end
 
     local hash = crc(out)
@@ -575,6 +584,9 @@ function command(cmd, param)
         ptyn_toggle = false
         ecc = 0
         lps = string.rep("_", 32)
+        time_display_utc = "-"
+        time_display_local = "-"
+        time_display_offset = 0
     elseif cmd:lower() == "superpi" then
         if #param <= 4 then last_super_pi = tonumber(param, 16) end
     end
@@ -585,6 +597,78 @@ local function findODAByAID(t, targetAID)
         if data.aid == targetAID then return grp, data.version end
     end
     return nil, nil
+end
+
+local function dateToEpoch(year, month, day)
+    local daysInMonth = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+
+    local function isLeapYear(y)
+        return (y % 4 == 0 and y % 100 ~= 0) or (y % 400 == 0)
+    end
+
+    if year < 2025 or month < 1 or month > 12 or day < 1 or day > 31 then error(string.format("%d %d %d", year, month, day), 2) end
+
+    local totalDays = 0
+    for y = 2025, year - 1 do
+        totalDays = totalDays + (isLeapYear(y) and 366 or 365)
+    end
+
+    for m = 1, month - 1 do
+        local days = daysInMonth[m]
+        if m == 2 and isLeapYear(year) then days = 29 end
+        totalDays = totalDays + days
+    end
+
+    totalDays = totalDays + (day - 1)
+
+    return totalDays * 86400
+end
+
+local function epochToDate(epochSeconds)
+    local totalDays = math.floor(epochSeconds / 86400)
+
+    local remainingSeconds = epochSeconds % 86400
+    local hour = math.floor(remainingSeconds / 3600)
+    local minute = math.floor((remainingSeconds % 3600) / 60)
+
+    local year = 2025
+
+    local function isLeapYear(y)
+        return (y % 4 == 0 and y % 100 ~= 0) or (y % 400 == 0)
+    end
+
+    while true do
+        local daysInYear = isLeapYear(year) and 366 or 365
+        if totalDays < daysInYear then break end
+        totalDays = totalDays - daysInYear
+        year = year + 1
+    end
+
+    local daysInMonth = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+    if isLeapYear(year) then daysInMonth[2] = 29 end
+
+    local month = 1
+    for m = 1, 12 do
+        if totalDays < daysInMonth[m] then break end
+        totalDays = totalDays - daysInMonth[m]
+        month = month + 1
+    end
+
+    return year, month, totalDays + 1, hour, minute
+end
+
+local function getDayOfWeek(year, month, day)
+    if month < 3 then
+        month = month + 12
+        year = year - 1
+    end
+
+    local K = year % 100
+    local J = math.floor(year / 100)
+
+    local h = (day + math.floor(13 * (month + 1) / 5) + K + math.floor(K / 4) + math.floor(J / 4) - 2 * J) % 7
+
+    return ((h + 5) % 7) + 1
 end
 
 function group(stream, b_corr, a, b, c, d)
@@ -696,6 +780,35 @@ function group(stream, b_corr, a, b, c, d)
                 local carriage = lps:find("\r", 1, true)
                 if carriage then lps_display = lps:sub(1, carriage - 1)
                 else lps_display = lps:gsub("%s+$", "") end
+            elseif group_type == 4 and group_version == 0 then
+                if d < 0 or c < 0 then return end
+                local system_time = os.time()
+                local mjd = ((b & 7) << 15) | c >> 1
+                local year = math.floor((mjd - 15078.2) / 365.25)
+                local month = math.floor((mjd - 14956.1 - math.floor(year * 365.25)) / 30.6001)
+                local day = mjd - 14956 - math.floor(year * 365.25) - math.floor(month * 30.6001)
+                local k = 0
+                if month == 14 or month == 15 then k = 1 end
+                year = year + 1900 + k
+                month = month - 1 - k * 12
+
+                local hour = (c & 1) << 4 | (d & 0xf000) >> 12
+                local minute = (d & 0xfc0) >> 6
+                local offset_sign = (d & 32) >> 5 -- 0 = +, i have no clue why
+                local offset = d & 31 -- 2 = hour, meaning one means 30 minutes of offset
+
+                local epoch = dateToEpoch(year, month, day) + (hour * 3600) + (minute * 60)
+                local utc_year, utc_month, utc_day, utc_hour, utc_minute = epochToDate(epoch)
+                local weekday_table = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+                time_display_utc = string.format("%d/%02d/%02d (%s) - %02d:%02d", utc_year, utc_month, utc_day, weekday_table[getDayOfWeek(utc_year, utc_month, utc_day)], utc_hour, utc_minute)
+
+                time_display_offset = os.difftime(system_time, epoch+1735689600)
+
+                if offset_sign == 0 then epoch = epoch + (offset*1800)
+                else epoch = epoch - (offset*1800) end
+
+                local local_year, local_month, local_day, local_hour, local_minute = epochToDate(epoch)
+                time_display_local = string.format("%d/%02d/%02d (%s) - %02d:%02d", local_year, local_month, local_day, weekday_table[getDayOfWeek(local_year, local_month, local_day)], local_hour, local_minute)
             end
         end
     end
