@@ -2,29 +2,30 @@
 #include <stdio.h>
 #include <string.h>
 #include <shlobj.h>
+#include <stdint.h>
 #include "lua/lua.h"
 #include "lua/lualib.h"
 #include "lua/lauxlib.h"
 
 typedef struct {
-    unsigned short Year;
-    unsigned char Month;
-    unsigned char Day;
-    unsigned char Hour;
-    unsigned char Minutes;
-    unsigned char Second;
-    unsigned char Centisecond;
-    unsigned short RFU;
-    int Blk1;
-    int Blk2;
-    int Blk3;
-    int Blk4;
+    uint16_t Year;
+    uint8_t Month;
+    uint8_t Day;
+    uint8_t Hour;
+    uint8_t Minutes;
+    uint8_t Second;
+    uint8_t Centisecond;
+    uint16_t RFU;
+    int32_t Blk1;
+    int32_t Blk2;
+    int32_t Blk3;
+    int32_t Blk4;
 } TRDSGroup;
 
 typedef struct {
     // fuckass delphi
-    unsigned char len;
-    char data[255];
+    uint8_t len;
+    uint8_t data[255];
 } ShortString;
 
 typedef struct {
@@ -33,7 +34,7 @@ typedef struct {
 } TRecord;
 
 typedef struct {
-    int Count;
+    int32_t Count;
     TRecord Records[255];
 } TDB;
 
@@ -53,8 +54,8 @@ static HFONT g_hCurrentFont = NULL;
 #define IDC_MAIN_BUTTON 101
 
 #define WINDOW_HEIGHT 380
-#define WINDOW_WIDTH 545
-#define BUTTON_COUNT 6
+#define WINDOW_WIDTH 620
+#define BUTTON_COUNT 7
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -62,7 +63,7 @@ static HFONT g_hCurrentFont = NULL;
 #define EVENT_BUTTON(I) \
 HWND hButton_event##I = CreateWindowEx( \
     0, "BUTTON", "Event " TOSTRING(I), \
-    WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, \
+    WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_NOTIFY, \
     10 + (75 * I), WINDOW_HEIGHT-62, \
     70, 30, hWnd, \
     (HMENU)(IDC_MAIN_BUTTON + I), hInst, NULL \
@@ -105,12 +106,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShowWindow(hwnd, SW_HIDE);
             return 0;
         case WM_COMMAND:
-            if (HIWORD(wParam) == BN_CLICKED)
+            if (HIWORD(wParam) == BN_CLICKED || HIWORD(wParam) == BN_DOUBLECLICKED)
             {
                 int controlId = LOWORD(wParam);
 
+                int offset = 0;
+                if(HIWORD(wParam) == BN_DOUBLECLICKED) offset = BUTTON_COUNT;
+
                 if (controlId == IDC_MAIN_BUTTON) InitLua();
-                else if (controlId > IDC_MAIN_BUTTON && controlId <= IDC_MAIN_BUTTON + BUTTON_COUNT) lua_event(controlId - IDC_MAIN_BUTTON);
+                else if (controlId > IDC_MAIN_BUTTON && controlId <= IDC_MAIN_BUTTON + BUTTON_COUNT) lua_event((controlId - IDC_MAIN_BUTTON) + offset);
             }
             break;
         case WM_DESTROY:
@@ -164,6 +168,7 @@ void CreatePluginWindow(HWND hOwner) {
     EVENT_BUTTON(4)
     EVENT_BUTTON(5)
     EVENT_BUTTON(6)
+    EVENT_BUTTON(7)
 
     HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_NAME);
     SendMessage(hEditControl, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -174,6 +179,7 @@ void CreatePluginWindow(HWND hOwner) {
     SendMessage(hButton_event4, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hButton_event5, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hButton_event6, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hButton_event7, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     HICON hIconBig = (HICON)SendMessage(hOwner, WM_GETICON, ICON_BIG, 0);
     HICON hIconSmall = (HICON)SendMessage(hOwner, WM_GETICON, ICON_SMALL, 0);
