@@ -576,7 +576,7 @@ local function render_menu()
         else out = out .. string.format("RDS-System time offset: ~0\r\n") end
         out = out .. string.format("Local time: %s\r\n", time_display_local)
         out = out .. string.format("UTC time: %s\r\n", time_display_utc)
-    elseif current_menu == event_count then
+    elseif current_menu == event_count and menu_extended then
         out = out .. "Toggled windows stickness"
     end
 
@@ -588,8 +588,10 @@ local function render_menu()
 end
 
 function event(event)
-    if current_menu == event_count then set_window_stick(not get_window_stick()) end
-    if event > event_count then menu_extended = true else
+    if event > event_count then
+        menu_extended = true
+        if event-event_count == event_count then set_window_stick(not get_window_stick()) end
+    else
         menu_extended = false
         current_menu = event
     end
