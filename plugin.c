@@ -564,9 +564,8 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             lua_close(L);
             L = NULL;
         }
-    } else if (_stricmp(Cmd, "CONFIGURE") == 0 || _stricmp(Cmd, "SHOW") == 0) ShowWindow(hWnd, SW_SHOW);
-    else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_MINIMIZE);
-    else if (_stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_RESTORE);
+    } else if (_stricmp(Cmd, "CONFIGURE") == 0 || _stricmp(Cmd, "SHOW") == 0 || _stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_SHOW);
+    else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_HIDE);
     else if (_stricmp(Cmd, "OPENWORKSPACE") == 0) {
         if(hWnd != NULL) {
             int value = GetPrivateProfileIntA("luahost", "Visible", 0, Param);
