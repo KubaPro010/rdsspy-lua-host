@@ -578,7 +578,6 @@ local function render_menu()
         out = out .. string.format("UTC time: %s\r\n", time_display_utc)
     elseif current_menu == event_count then
         out = out .. "Toggled windows stickness"
-        set_window_stick(not get_window_stick())
     end
 
     local hash = crc(out)
@@ -589,6 +588,7 @@ local function render_menu()
 end
 
 function event(event)
+    if current_menu == event_count then set_window_stick(not get_window_stick()) end
     if event > event_count then menu_extended = true else
         menu_extended = false
         current_menu = event
