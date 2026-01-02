@@ -608,13 +608,11 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             RECT rect; // get rect
             if (GetWindowRect(hWnd, &rect)) SetWindowPos(hWnd, NULL, rect.left+atoi(Param), rect.top, 0, 0, SWP_NOSIZE);
         }
-        lua_call_command(Cmd, Param);
     } else if(_stricmp(Cmd, "MOVEY") == 0) {
         if(sticky != 0) {
             RECT rect; // get rect
             if (GetWindowRect(hWnd, &rect)) SetWindowPos(hWnd, NULL, rect.left, rect.top+atoi(Param), 0, 0, SWP_NOSIZE);
         }
-        lua_call_command(Cmd, Param);
     } else lua_call_command(Cmd, Param);
 }
 
