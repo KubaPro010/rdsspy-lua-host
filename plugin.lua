@@ -71,7 +71,7 @@ function db.read_record(index) end
 ---@param value string
 function db.add_value(key, value) end
 
-function db.reset_values(key, value) end
+function db.reset_values() end
 
 ---@return integer
 function db.count_records(key, value) end
