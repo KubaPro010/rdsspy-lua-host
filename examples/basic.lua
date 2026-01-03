@@ -548,7 +548,7 @@ local function render_menu()
             out = out .. string.format("%s - %s\r\n\t", rtp_types[rtp_type2+1], current_rt:sub(rtp_start2+1, rtp_start2+rtp_len2+1))
         else out = out .. "-\r\n\t-\r\n\t" end
         out = out .. string.format("RAW %d,%d,%d,%d,%d,%d\r\n", rtp_type1, rtp_start1, rtp_len1, rtp_type2, rtp_start2, rtp_len2)
-    elseif current_menu == 3 then
+    elseif current_menu == 3 and not menu_extended then
         local pi_code = tonumber(db.read_value("PI") or "0000", 16)
         local country_id = (pi_code & 0xF000) >> 12
         local coverage_id = (pi_code & 0xF00) >> 8
@@ -563,14 +563,14 @@ local function render_menu()
         out = out .. string.format("Coverage: %s\r\n", pi_coverage[coverage_id+1])
         out = out .. string.format("Country: %s (%X)\r\n\r\n", country_name, ecc)
 
-        out = out .. string.format("ERT: %s\r\n\r\n", ert_display)
-
         local oda_string = ""
         for grp, data in pairs(odas) do
             local ver_char = (data.version == 0) and "A" or "B"
             oda_string = oda_string .. string.format("%d%s - %04X | ", grp, ver_char, data.aid)
         end
         out = out .. string.format("ODA: %s\r\n", oda_string:sub(1, #oda_string-2))
+    elseif current_menu == 3 and menu_extended then
+        out = out .. string.format("ERT: %s\r\n\r\n", ert_display)
     elseif current_menu == 4 then
         if time_display_offset > 2 then out = out .. string.format("RDS-System time offset: %d seconds\r\n", time_display_offset)
         else out = out .. string.format("RDS-System time offset: ~0\r\n") end
