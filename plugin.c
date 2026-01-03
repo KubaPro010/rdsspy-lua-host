@@ -23,7 +23,6 @@ typedef struct {
 } TRDSGroup;
 
 typedef struct {
-    // fuckass delphi
     uint8_t len;
     uint8_t data[255];
 } ShortString;
@@ -80,9 +79,9 @@ static const unsigned char EBU[127] = {
     0x00, 0x00, 0x00, 0xFD, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xE6, 0x9C, 0x9F, 0x00
 };
 
-static unsigned short console_mode = 0;
-static unsigned short stop_execution = 0;
-static unsigned short sticky = 0;
+static uint8_t console_mode = 0;
+static uint8_t stop_execution = 0;
+static uint8_t sticky = 0;
 static unsigned char workspaceFile[MAX_PATH] = "";
 
 const char* int_to_string(int value) {
@@ -202,35 +201,29 @@ void AppendText(const char* text) {
     }
 }
 
-void SetText(const char* text) {
-    if (hEditControl != NULL) SetWindowTextA(hEditControl, text);
-}
-
 int lua_log(lua_State* localL) {
     if(console_mode != 0) return luaL_error(localL, "Invalid log");
-    const char* data = luaL_checkstring(localL, 1);
-    AppendText(data);
+    AppendText(luaL_checkstring(localL, 1));
     AppendText("\r\n");
     return 0;
 }
 
 int lua_set_console(lua_State* localL) {
     if(console_mode != 1) return luaL_error(localL, "Invalid log");
-    const char* data = luaL_checkstring(localL, 1);
-    SetText(data);
+    if (hEditControl != NULL) SetWindowTextA(hEditControl, luaL_checkstring(localL, 1));
     return 0;
 }
 
 int lua_set_console_mode(lua_State* localL) {
-    if (!lua_isboolean(localL, 1)) return luaL_error(localL, "boolean expected, got %s", luaL_typename(localL, 1));
+    if (!lua_isboolean(localL, 1)) return luaL_typeerror(L, 1, lua_typename(L, LUA_TBOOLEAN));
     int mode = lua_toboolean(localL, 1);
-    SetText("");
+    if (hEditControl != NULL) SetWindowTextA(hEditControl, "");
     console_mode = mode;
     return 0;
 }
 
 int lua_set_window_stick(lua_State* localL) {
-    if (!lua_isboolean(localL, 1)) return luaL_error(localL, "boolean expected, got %s", luaL_typename(localL, 1));
+    if (!lua_isboolean(localL, 1)) return luaL_typeerror(L, 1, lua_typename(L, LUA_TBOOLEAN));
     sticky = lua_toboolean(localL, 1);
     return 0;
 }
@@ -257,9 +250,7 @@ int lua_set_font_size(lua_State* localL) {
 }
 
 int lua_MessageBox(lua_State* localL) {
-    const char* data = luaL_checkstring(localL, 1);
-    const char* title = luaL_checkstring(localL, 2);
-    MessageBoxA(NULL, data, title, MB_OK | MB_TOPMOST);
+    MessageBoxA(NULL, luaL_checkstring(localL, 1), luaL_checkstring(localL, 2), MB_OK | MB_TOPMOST);
     return 0;
 }
 
@@ -390,8 +381,7 @@ int lua_SaveString(lua_State* localL) {
             WritePrivateProfileStringA(section, key, value, fullPath);
         }
     } else if(lua_isnil(localL, 1)) WritePrivateProfileStringA(section, key, value, workspaceFile);
-    else luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
-    return 0;
+    else return luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
 }
 
 int lua_LoadString(lua_State* localL) {
@@ -415,8 +405,7 @@ int lua_LoadString(lua_State* localL) {
         GetPrivateProfileStringA(section, key, defaultValue, buffer, 1024, workspaceFile);
         lua_pushstring(localL, buffer);
         return 1;
-    } else luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
-    return 0;
+    } else return luaL_typeerror(L, 1, lua_typename(L, LUA_TSTRING));
 }
 
 void lua_call_command(const char* Cmd, const char* Param) {
@@ -441,8 +430,8 @@ void lua_call_group() {
     lua_getglobal(L, "group");
 
     if (lua_isfunction(L, -1)) {
-        lua_pushinteger(L, Group.RFU & 3); // TODO: find out if fuckass pira.cz meant msb or lsb, i have no clue what does "Bits: 0-1" mean
-        lua_pushboolean(L, (Group.RFU & 0x100) >> 8); // just do lsb for now i guess
+        lua_pushinteger(L, Group.RFU & 3);
+        lua_pushboolean(L, (Group.RFU & 0x100) >> 8);
         lua_pushinteger(L, Group.Blk1);
         lua_pushinteger(L, Group.Blk2);
         lua_pushinteger(L, Group.Blk3);
@@ -492,7 +481,6 @@ void lua_event(int event) {
 
 __declspec(dllexport) void WINAPI RDSGroup(TRDSGroup* PRDSGroup) {
     if (PRDSGroup == NULL) return;
-
     Group = *PRDSGroup;
     lua_call_group();
 }
@@ -500,21 +488,20 @@ __declspec(dllexport) void WINAPI RDSGroup(TRDSGroup* PRDSGroup) {
 __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
     if (Cmd == NULL) return;
     if (_stricmp(Cmd, "EXIT") == 0) {
-        if (hWnd != NULL) {
-            DestroyWindow(hWnd);
-            hWnd = NULL;
-        }
         if(L != NULL) {
             lua_close(L);
             L = NULL;
+        }
+        if (hWnd != NULL) {
+            DestroyWindow(hWnd);
+            hWnd = NULL;
         }
     } else if (_stricmp(Cmd, "CONFIGURE") == 0 || _stricmp(Cmd, "SHOW") == 0 || _stricmp(Cmd, "RESTORE") == 0) ShowWindow(hWnd, SW_SHOW);
     else if (_stricmp(Cmd, "MINIMIZE") == 0) ShowWindow(hWnd, SW_HIDE);
     else if (_stricmp(Cmd, "SHOWHIDE") == 0) {
         if(IsWindowVisible(hWnd)) ShowWindow(hWnd, SW_HIDE);
         else ShowWindow(hWnd, SW_SHOW);
-    }
-    else if (_stricmp(Cmd, "OPENWORKSPACE") == 0) {
+    } else if (_stricmp(Cmd, "OPENWORKSPACE") == 0) {
         if(hWnd != NULL) {
             int value = GetPrivateProfileIntA("luahost", "Visible", 0, Param);
             if(value == 1) ShowWindow(hWnd, SW_SHOW);
@@ -524,10 +511,10 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
             SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOSIZE);
         }
         sticky = GetPrivateProfileIntA("luahost", "Stick", 0, Param);
-        lua_call_command(Cmd, Param); // still call
+        lua_call_command(Cmd, Param);
     } else if (_stricmp(Cmd, "SAVEWORKSPACE") == 0) {
         if(hWnd != NULL) {
-            RECT rect; // get rect
+            RECT rect;
             if (GetWindowRect(hWnd, &rect)) {
                 WritePrivateProfileStringA("luahost", "Left", int_to_string(rect.left), Param);
                 WritePrivateProfileStringA("luahost", "Top", int_to_string(rect.top), Param);
@@ -537,7 +524,7 @@ __declspec(dllexport) void WINAPI Command(const char* Cmd, const char* Param) {
         }
         memcpy(workspaceFile, Param, MAX_PATH);
         workspaceFile[MAX_PATH-1] = 0;
-        lua_call_command(Cmd, Param); // still call
+        lua_call_command(Cmd, Param);
     } else if (_stricmp(Cmd, "LUASCRIPT") == 0) { // custom
         char msg_buffer[255];
         if (luaL_loadfile(L, Param) != LUA_OK) {
