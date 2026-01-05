@@ -93,7 +93,7 @@ local pi_ecc_to_country = {
     e1 =  {
         "Encoder fault", -- 0
         "Hellenic Republic (Greece)", -- 1
-        "Libya", -- 2
+        "Republic of Cyprus", -- 2
         "Republic of San Marino", -- 3
         "Swiss Confederation", -- 4
         "Hashemite Kingdom of Jordan", -- 5
@@ -104,7 +104,7 @@ local pi_ecc_to_country = {
         "United Kingdom of Great Britain and Northern Ireland (Gibraltar)", -- 10 A
         "Republic of Iraq", -- 11 B
         "United Kingdom of Great Britain and Northern Ireland", -- 12 C
-        "Unknown", -- 13 D
+        "Libya", -- 13 D
         "Romania", -- 14 E
         "Republic of France", -- 15 F wish i could nuke this
     },
