@@ -180,6 +180,24 @@ local pi_ecc_to_country = {
         "Unknown", -- 14 E
         "Unknown", -- 15 F
     },
+    e6 =  {
+        "Encoder fault", -- 0
+        "Unknown", -- 1
+        "Unknown", -- 2
+        "Republic of West Poland", -- 3 coming soon
+        "Unknown", -- 4
+        "Unknown", -- 5
+        "Unknown", -- 6
+        "Unknown", -- 7
+        "Unknown", -- 8
+        "Unknown", -- 9
+        "Unknown", -- 10 A
+        "Unknown", -- 11 B
+        "Unknown", -- 12 C
+        "Unknown", -- 13 D
+        "Unknown", -- 14 E
+        "Unknown", -- 15 F
+    },
     a0 = {
         "Encoder fault", -- 0
         "United States of America", -- 1
