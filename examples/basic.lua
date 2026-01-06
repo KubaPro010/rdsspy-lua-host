@@ -289,6 +289,24 @@ local pi_ecc_to_country = {
         "United Mexican States", -- 14 E
         "United Mexican States", -- 15 F
     },
+    a6 = {
+        "Encoder fault", -- 0
+        "Unknown", -- 1
+        "Unknown", -- 2
+        "Unknown", -- 3
+        "Unknown", -- 4
+        "Unknown", -- 5
+        "Unknown", -- 6
+        "Unknown", -- 7
+        "Unknown", -- 8
+        "Unknown", -- 9
+        "Unknown", -- 10 A
+        "Unknown", -- 11 B
+        "Unknown", -- 12 C
+        "Unknown", -- 13 D
+        "Unknown", -- 14 E
+        "Republic of France (Saint Pierre and Miquelon)", -- 15 F
+    },
     d0 = {
         "Encoder fault", -- 0
         "Republic of Cameroon", -- 1
