@@ -215,7 +215,7 @@ local pi_ecc_to_country = {
         "Canada", -- 12 C
         "Canada", -- 13 D
         "Cananda", -- 14 E
-        "Greenland", -- 15 F
+        "Kingdom of Denmark (Greenland)", -- 15 F
     },
     a2 = {
         "Encoder fault", -- 0
