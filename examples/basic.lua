@@ -632,6 +632,7 @@ function event(event)
         current_menu = event
     end
     render_menu()
+    last_render_hash = 0
 end
 
 local function ternary(cond, a, b)
