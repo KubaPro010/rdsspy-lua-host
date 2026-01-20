@@ -2,21 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct {
-    uint16_t Year;
-    uint8_t Month;
-    uint8_t Day;
-    uint8_t Hour;
-    uint8_t Minute;
-    uint8_t Second;
-    uint8_t Centisecond;
-    uint16_t RFU;
-    int32_t Blk1;
-    int32_t Blk2;
-    int32_t Blk3;
-    int32_t Blk4;
-} TRDSGroup;
-
 static TRDSGroup Group;
 
 static HWND hWnd = NULL;
@@ -393,8 +378,7 @@ __declspec(dllexport) int WINAPI Initialize(HANDLE hHandle, TDB* DBPointer) {
     return (int)hWnd;
 }
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     if (fdwReason == DLL_PROCESS_ATTACH) hInst = hinstDLL;
     return TRUE;
 }

@@ -1,24 +1,11 @@
+#pragma once
+
 #include <windows.h>
 #include <shlobj.h>
-#include <stdint.h>
-#include "lua/lua.h"
-#include "lua/lualib.h"
-#include "lua/lauxlib.h"
-
-typedef struct {
-    uint8_t len;
-    uint8_t data[255];
-} ShortString;
-
-typedef struct {
-    ShortString Key;
-    ShortString Value;
-} TRecord;
-
-typedef struct {
-    int32_t Count;
-    TRecord Records[255];
-} TDB;
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+#include "types.h"
 
 extern HFONT g_hCurrentFont;
 #define FONT_NAME "Segoe UI"
